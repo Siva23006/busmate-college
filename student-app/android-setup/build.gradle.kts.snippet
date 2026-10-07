@@ -1,0 +1,17 @@
+// Apply to android/app/build.gradle.kts so the Google Maps key is read from
+// android/local.properties (git-ignored, so the key never ends up in your repository).
+// Only needed after a fresh `flutter create`; the android/ folder in this project already has it.
+
+// 1) At the very top of the file (above `plugins { ... }`):
+import java.util.Properties
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+// 2) Inside android { defaultConfig { ... } } add this line:
+//        manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY", "")
+
+// 3) In android/local.properties add:
+//        MAPS_API_KEY=your-google-maps-android-key

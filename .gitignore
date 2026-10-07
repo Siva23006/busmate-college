@@ -1,0 +1,29 @@
+# Secrets: never commit
+.env
+.env.local
+.env.*.local
+**/secrets/
+**/google-services.json
+**/local.properties
+**/key.properties
+*.jks
+*.keystore
+
+# Dependencies and builds
+node_modules/
+.next/
+out/
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.tsbuildinfo
+
+# Editors / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+firebase-service-account*.json
+*.log

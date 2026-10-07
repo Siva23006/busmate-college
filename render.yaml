@@ -1,0 +1,28 @@
+# Render Blueprint: deploys the BusMate backend (API + Socket.IO) for free.
+# Render dashboard -> New -> Blueprint -> pick this GitHub repo.
+services:
+  - type: web
+    name: busmate-api
+    runtime: node
+    plan: free
+    region: singapore          # closest Render region to Chennai
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL       # paste your Neon connection string when Render asks
+        sync: false
+      - key: JWT_SECRET         # paste a long random string when Render asks
+        sync: false
+      - key: CORS_ORIGINS       # your Vercel URL, e.g. https://busmate-admin.vercel.app
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: ALLOW_SIMULATION   # DEMO simulator allowed; set "false" before real use
+        value: "true"
+      - key: APP_TIME_ZONE
+        value: Asia/Kolkata
