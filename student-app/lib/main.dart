@@ -10,6 +10,7 @@ import 'screens/main_shell.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
 
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -20,6 +21,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: session),
+        ChangeNotifierProvider(create: (_) => ThemeController()..load()),
         ChangeNotifierProvider(create: (_) => BusProvider(session.api)),
       ],
       child: const BusMateStudentApp(),
@@ -38,7 +40,8 @@ class BusMateStudentApp extends StatelessWidget {
       scaffoldMessengerKey: messengerKey,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: context.watch<ThemeController>().mode, // light (white) by default
+      themeAnimationDuration: const Duration(milliseconds: 300),
       home: const RootGate(),
     );
   }
@@ -69,7 +72,17 @@ class _RootGateState extends State<RootGate> {
     // In-app banner for notifications pushed over Socket.IO.
     _notifSub = _bus.incoming.listen((n) {
       messengerKey.currentState?.showSnackBar(SnackBar(
-        content: Text('${n.title}\n${n.message}'),
+        content: Row(children: [
+          const Icon(Icons.notifications_active_rounded, color: BrandColors.amber, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(n.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: Colors.white)),
+              if (n.message.isNotEmpty)
+                Text(n.message, style: const TextStyle(fontSize: 12.5, color: Colors.white70)),
+            ]),
+          ),
+        ]),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 6),
       ));
@@ -96,8 +109,15 @@ class _RootGateState extends State<RootGate> {
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
-    if (!_splashDone || session.state == SessionState.unknown) return const SplashScreen();
-    if (session.state == SessionState.loggedOut) return const LoginScreen();
-    return const MainShell();
+    final Widget screen;
+    if (!_splashDone || session.state == SessionState.unknown) {
+      screen = const SplashScreen();
+    } else if (session.state == SessionState.loggedOut) {
+      screen = const LoginScreen();
+    } else {
+      screen = const MainShell();
+    }
+    // Soft cross-fade between splash, login and the app.
+    return AnimatedSwitcher(duration: const Duration(milliseconds: 400), child: screen);
   }
 }

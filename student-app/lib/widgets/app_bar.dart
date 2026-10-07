@@ -6,19 +6,22 @@ import '../theme/app_theme.dart';
 /// Shows a clear round back button whenever the screen can go back.
 PreferredSizeWidget bmAppBar(BuildContext context, String title, {String? subtitle, List<Widget>? actions}) {
   final canPop = Navigator.of(context).canPop();
+  final pal = Palette.of(context);
   return AppBar(
     automaticallyImplyLeading: false,
     titleSpacing: canPop ? 4 : 20,
     leading: canPop ? const BmBackButton() : null,
+    leadingWidth: 60,
     title: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: pal.text)),
       if (subtitle != null)
-        Text(subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).hintColor)),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Text(subtitle,
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: pal.muted)),
+        ),
     ]),
-    actions: actions,
+    actions: actions == null ? null : [...actions, const SizedBox(width: 8)],
   );
 }
 
@@ -26,24 +29,35 @@ PreferredSizeWidget bmAppBar(BuildContext context, String title, {String? subtit
 class BmBackButton extends StatelessWidget {
   const BmBackButton({super.key, this.onMap = false});
 
-  /// Dark filled circle for use on top of a map.
+  /// Floating style with a shadow for use on top of a map.
   final bool onMap;
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final bg = onMap ? BrandColors.ink : (dark ? BrandColors.ink3 : const Color(0xFFE9EDF4));
-    final fg = onMap || dark ? Colors.white : BrandColors.ink;
+    final pal = Palette.of(context);
     return Padding(
       padding: const EdgeInsets.all(8),
-      child: Material(
-        color: bg,
-        shape: const CircleBorder(),
-        elevation: onMap ? 4 : 0,
-        child: IconButton(
-          tooltip: 'Back',
-          icon: Icon(Icons.arrow_back_rounded, color: fg),
-          onPressed: () => Navigator.of(context).maybePop(),
+      child: Center(
+        widthFactor: 1,
+        heightFactor: 1,
+        child: DecoratedBox(
+          decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: onMap ? pal.floatShadow : null),
+          child: Material(
+            color: pal.card,
+            shape: CircleBorder(side: BorderSide(color: pal.line)),
+            clipBehavior: Clip.antiAlias,
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: IconButton(
+                tooltip: 'Back',
+                padding: EdgeInsets.zero,
+                iconSize: 20,
+                icon: Icon(Icons.arrow_back_rounded, color: pal.text),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+          ),
         ),
       ),
     );

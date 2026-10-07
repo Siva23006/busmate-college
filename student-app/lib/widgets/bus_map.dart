@@ -273,14 +273,27 @@ class _MapButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: active ? BrandColors.amber : Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 4,
-      child: IconButton(
-        tooltip: tooltip,
-        onPressed: onTap,
-        icon: Icon(icon, color: active ? BrandColors.ink : null),
+    final pal = Palette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), boxShadow: pal.floatShadow),
+      child: Material(
+        color: active ? BrandColors.amber : pal.card,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: active ? BrandColors.amber : pal.line),
+        ),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: IconButton(
+            tooltip: tooltip,
+            padding: EdgeInsets.zero,
+            iconSize: 20,
+            onPressed: onTap,
+            icon: Icon(icon, color: active ? BrandColors.ink : (onTap == null ? pal.muted.withValues(alpha: 0.5) : pal.text)),
+          ),
+        ),
       ),
     );
   }

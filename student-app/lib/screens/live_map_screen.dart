@@ -16,33 +16,37 @@ class LiveMapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.watch<BusProvider>();
-    final top = MediaQuery.of(context).padding.top;
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final pal = Palette.of(context);
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     final (live, liveLevel) = liveLabel(p.liveState);
-    const cardHeight = 210.0;
+    const cardHeight = 200.0;
 
     return Scaffold(
       body: Stack(children: [
         Positioned.fill(child: BusMapView(bottomPadding: cardHeight + bottom, topPadding: top + 60, controlsBottom: cardHeight + bottom + 16)),
         Positioned(
-          left: 12,
+          left: 4,
           right: 12,
-          top: top + 8,
+          top: top + 4,
           child: Row(children: [
             const BmBackButton(onMap: true),
-            const SizedBox(width: 2),
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                decoration: BoxDecoration(color: BrandColors.ink.withValues(alpha: 0.94), borderRadius: BorderRadius.circular(18)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: pal.card.withValues(alpha: 0.97),
+                  borderRadius: BorderRadius.circular(Ui.radius),
+                  border: Border.all(color: pal.line),
+                  boxShadow: pal.floatShadow,
+                ),
                 child: Row(children: [
                   Expanded(
                     child: Text(p.bus?.number ?? 'Live map',
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: pal.text, fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
                   if (p.isSimulation) ...[const DemoTag(), const SizedBox(width: 6)],
-                  PhaseChip(label: live, level: liveLevel),
+                  PhaseChip(label: live, level: liveLevel, pulse: liveLevel == Level.good && p.hasActiveTrip),
                 ]),
               ),
             ),
@@ -52,18 +56,21 @@ class LiveMapScreen extends StatelessWidget {
           left: 12,
           right: 12,
           bottom: bottom + 12,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              borderRadius: BorderRadius.circular(26),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 4))],
+          child: FadeSlideIn(
+            offsetY: 24,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: pal.bg,
+                borderRadius: BorderRadius.circular(Ui.radiusLarge),
+                border: Border.all(color: pal.line),
+                boxShadow: pal.floatShadow,
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Padding(padding: const EdgeInsets.fromLTRB(4, 2, 4, 10), child: RouteHeader(p: p)),
+                BigEtaCard(p: p),
+              ]),
             ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              RouteHeader(p: p),
-              const SizedBox(height: 10),
-              BigEtaCard(p: p),
-            ]),
           ),
         ),
       ]),

@@ -7,6 +7,7 @@ import '../providers/bus_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/app_bar.dart';
+import '../widgets/common.dart';
 
 /// Route as a vertical timeline; the student's stop is highlighted. Tap a stop to make it "my stop".
 class RouteScreen extends StatelessWidget {
@@ -17,11 +18,16 @@ class RouteScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
+        icon: const IconTile(icon: Icons.person_pin_circle_rounded, size: 44),
         title: const Text('Set as my stop?'),
-        content: Text('You will get "approaching" and "reached" alerts for ${s.name}.'),
+        content: Text('You will get "approaching" and "reached" alerts for ${s.name}.', textAlign: TextAlign.center),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('CANCEL')),
-          FilledButton(style: FilledButton.styleFrom(minimumSize: const Size(100, 44)), onPressed: () => Navigator.pop(c, true), child: const Text('SET')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(96, 42)),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Set stop'),
+          ),
         ],
       ),
     );
@@ -37,40 +43,63 @@ class RouteScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.watch<BusProvider>();
+    final pal = Palette.of(context);
     final route = p.route;
     // Stops follow the running trip: the evening (From College) run lists them in reverse.
     final stops = p.travelStops;
-    final hint = Theme.of(context).hintColor;
 
     return Scaffold(
-      appBar: bmAppBar(context, route?.name ?? 'Route', subtitle: p.bus == null ? null : 'Bus ${p.bus!.number}'),
+      appBar: bmAppBar(context, route?.name ?? 'Route', subtitle: p.bus == null ? 'No bus selected' : 'Bus ${p.bus!.number}'),
       body: route == null
-          ? const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No route assigned to this bus yet.')))
-          : ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 28), children: [
-              // Daily timings set by the transport office
-              Row(children: [
-                Expanded(child: _RunCard(morning: true, route: route, live: p.hasActiveTrip && p.direction != fromCollege)),
-                const SizedBox(width: 10),
-                Expanded(child: _RunCard(morning: false, route: route, live: p.hasActiveTrip && p.direction == fromCollege)),
-              ]),
-              const SizedBox(height: 18),
-              Row(children: [
-                Text(p.hasActiveTrip ? 'STOPS ON THIS TRIP' : 'STOPS', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.4)),
-                const Spacer(),
-                Text('Tap a stop to make it yours', style: TextStyle(fontSize: 12, color: hint)),
-              ]),
-              const SizedBox(height: 8),
-              for (var i = 0; i < stops.length; i++)
-                _StopTile(
-                  stop: stops[i],
-                  isFirst: i == 0,
-                  isLast: i == stops.length - 1,
-                  isMine: stops[i].id == p.myStopId,
-                  eta: p.hasActiveTrip ? p.eta?.forStop(stops[i].id) : null,
-                  atStop: p.location?.atStopId == stops[i].id,
-                  onTap: () => _choose(context, stops[i]),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const IconTile(icon: Icons.route_rounded, size: 52),
+                  const SizedBox(height: 14),
+                  Text('No route yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: pal.text)),
+                  const SizedBox(height: 4),
+                  Text('No route is assigned to this bus yet.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: pal.muted)),
+                ]),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: p.load,
+              child: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 28), children: [
+                // Daily timings set by the transport office
+                const SectionLabel('Daily timings'),
+                FadeSlideIn(
+                  child: Row(children: [
+                    Expanded(child: _RunCard(morning: true, route: route, live: p.hasActiveTrip && p.direction != fromCollege)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _RunCard(morning: false, route: route, live: p.hasActiveTrip && p.direction == fromCollege)),
+                  ]),
                 ),
-            ]),
+                const SizedBox(height: 20),
+                SectionLabel(
+                  p.hasActiveTrip ? 'Stops on this trip' : 'Stops',
+                  trailing: Text('${stops.length} stops · tap to set yours', style: TextStyle(fontSize: 11.5, color: pal.muted)),
+                ),
+                FadeSlideIn(
+                  index: 1,
+                  child: BmCard(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                    child: Column(children: [
+                      for (var i = 0; i < stops.length; i++)
+                        _StopTile(
+                          stop: stops[i],
+                          isFirst: i == 0,
+                          isLast: i == stops.length - 1,
+                          isMine: stops[i].id == p.myStopId,
+                          eta: p.hasActiveTrip ? p.eta?.forStop(stops[i].id) : null,
+                          atStop: p.location?.atStopId == stops[i].id,
+                          onTap: () => _choose(context, stops[i]),
+                        ),
+                    ]),
+                  ),
+                ),
+              ]),
+            ),
     );
   }
 }
@@ -87,53 +116,81 @@ class _StopTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = Palette.of(context);
     final passed = eta?.passed == true;
-    final dotColor = atStop ? BrandColors.green : (isMine ? BrandColors.amber : (passed ? Colors.grey : BrandColors.ink3));
-    final lineColor = Theme.of(context).dividerColor;
+    final dotColor = atStop
+        ? BrandColors.green
+        : isMine
+            ? BrandColors.amber
+            : (passed ? BrandColors.green.withValues(alpha: 0.55) : pal.line);
+    final lineColor = pal.line;
+    final big = isMine || atStop;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(Ui.radiusSmall),
       child: IntrinsicHeight(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           SizedBox(
-            width: 36,
+            width: 30,
             child: Column(children: [
-              Expanded(child: Container(width: 3, color: isFirst ? Colors.transparent : lineColor)),
-              Container(
-                width: isMine ? 24 : 18,
-                height: isMine ? 24 : 18,
-                decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
+              Expanded(child: Container(width: 2, color: isFirst ? Colors.transparent : lineColor)),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: big ? 16 : 11,
+                height: big ? 16 : 11,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: pal.card, width: 2),
+                  boxShadow: big ? [BoxShadow(color: dotColor.withValues(alpha: 0.45), blurRadius: 6)] : null,
+                ),
               ),
-              Expanded(child: Container(width: 3, color: isLast ? Colors.transparent : lineColor)),
+              Expanded(child: Container(width: 2, color: isLast ? Colors.transparent : lineColor)),
             ]),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.all(14),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.symmetric(vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isMine ? BrandColors.amber.withValues(alpha: 0.16) : null,
-                borderRadius: BorderRadius.circular(14),
-                border: isMine ? Border.all(color: BrandColors.amber) : null,
+                color: isMine ? BrandColors.amber.withValues(alpha: pal.dark ? 0.14 : 0.10) : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isMine ? BrandColors.amber.withValues(alpha: 0.6) : Colors.transparent),
               ),
               child: Row(children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(stop.name,
+                    Text('${stop.order}. ${stop.name}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: isMine ? FontWeight.w900 : FontWeight.w600,
+                          fontSize: 14,
+                          fontWeight: isMine ? FontWeight.w700 : FontWeight.w500,
+                          color: passed ? pal.muted : pal.text,
                           decoration: passed ? TextDecoration.lineThrough : null,
+                          decorationColor: pal.muted,
                         )),
-                    if (isMine) const Text('Your stop', style: TextStyle(color: BrandColors.amber, fontWeight: FontWeight.w700)),
-                    if (atStop) const Text('Bus is here now', style: TextStyle(color: BrandColors.green, fontWeight: FontWeight.w700)),
+                    if (isMine || atStop)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          atStop ? (isMine ? 'Your stop · bus is here now' : 'Bus is here now') : 'Your stop',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: atStop ? BrandColors.green : (pal.dark ? BrandColors.amber : BrandColors.yellow),
+                          ),
+                        ),
+                      ),
                   ]),
                 ),
+                const SizedBox(width: 8),
                 if (eta != null && !passed)
-                  Text('~${etaText(eta!.etaSeconds)}', style: const TextStyle(fontWeight: FontWeight.w800))
-                else if (stop.scheduledTime != null)
-                  Text(stop.scheduledTime!.substring(0, 5), style: TextStyle(color: Theme.of(context).hintColor)),
+                  Text('~${etaText(eta!.etaSeconds)}', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: pal.text))
+                else if (stop.scheduledTime != null && stop.scheduledTime!.length >= 5)
+                  Text(clock12(stop.scheduledTime!.substring(0, 5)), style: TextStyle(fontSize: 12, color: pal.muted)),
               ]),
             ),
           ),
@@ -142,7 +199,6 @@ class _StopTile extends StatelessWidget {
     );
   }
 }
-
 
 /// Morning or evening run: from -> to and the departure time set by the admin.
 class _RunCard extends StatelessWidget {
@@ -153,34 +209,33 @@ class _RunCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = Palette.of(context);
     final dir = morning ? toCollege : fromCollege;
-    final fg = morning ? BrandColors.ink : Colors.white;
-    return Container(
+    final tint = morning ? BrandColors.amber : BrandColors.indigo;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: morning ? BrandColors.amber : BrandColors.ink3,
-        borderRadius: BorderRadius.circular(20),
-        border: live ? Border.all(color: BrandColors.green, width: 3) : null,
+        color: pal.card,
+        borderRadius: BorderRadius.circular(Ui.radius),
+        border: Border.all(color: live ? BrandColors.green : pal.line, width: live ? 1.5 : 1),
+        boxShadow: pal.shadow,
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(morning ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded, color: fg, size: 18),
-          const SizedBox(width: 6),
-          Text(morning ? 'MORNING' : 'EVENING', style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+          IconTile(icon: morning ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded, color: tint, size: 30),
           const Spacer(),
-          if (live)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: BrandColors.green, borderRadius: BorderRadius.circular(8)),
-              child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
-            ),
+          if (live) const PhaseChip(label: 'LIVE', level: Level.good, pulse: true),
         ]),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
+        Text(morning ? 'MORNING' : 'EVENING',
+            style: TextStyle(color: pal.muted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+        const SizedBox(height: 2),
         Text(route.timeFor(dir) == null ? '--:--' : clock12(route.timeFor(dir)),
-            style: TextStyle(color: fg, fontSize: 24, fontWeight: FontWeight.w900)),
+            style: TextStyle(color: pal.text, fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
         Text('${route.fromFor(dir)} → ${route.toFor(dir)}',
-            maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w700)),
+            maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: pal.muted, fontSize: 12, fontWeight: FontWeight.w500, height: 1.3)),
       ]),
     );
   }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../widgets/app_bar.dart';
-
 import '../core/api_client.dart';
 import '../models/models.dart';
 import '../providers/bus_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_bar.dart';
 import '../widgets/common.dart';
 
 class SelectBusScreen extends StatefulWidget {
@@ -39,48 +39,86 @@ class _SelectBusScreenState extends State<SelectBusScreen> {
   @override
   Widget build(BuildContext context) {
     final current = context.watch<BusProvider>().bus?.id;
+    final pal = Palette.of(context);
     return Scaffold(
       appBar: bmAppBar(context, 'Select your bus', subtitle: 'Choose the bus you travel on'),
-      body: FutureBuilder<List<BusInfo>>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-          if (snap.hasError) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: ErrorBanner(snap.error.toString(), onRetry: () => setState(() => _future = context.read<BusProvider>().listBuses())),
-            );
-          }
-          final buses = snap.data!;
-          if (buses.isEmpty) return const Center(child: Text('No buses available yet.'));
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: buses.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, i) {
-              final b = buses[i];
-              final running = b.activeTripId != null;
-              return Card(
-                child: ListTile(
-                  enabled: !_busy,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: const Icon(Icons.directions_bus_rounded, size: 34),
-                  title: Row(children: [
-                    Text(b.number, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    const SizedBox(width: 8),
-                    if (b.isDemo) const DemoTag(),
-                  ]),
-                  subtitle: Text('${b.routeName ?? 'No route'}${b.isMyRoute ? ' · your route' : ''}'),
-                  trailing: b.id == current
-                      ? const Icon(Icons.check_circle, color: Colors.green)
-                      : PhaseChip(label: running ? 'RUNNING' : 'IDLE', level: running ? Level.good : Level.warn),
-                  onTap: () => _pick(b),
-                ),
+      body: Column(children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          child: _busy ? const LinearProgressIndicator(minHeight: 2) : const SizedBox(width: double.infinity),
+        ),
+        Expanded(
+          child: FutureBuilder<List<BusInfo>>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
+              if (snap.hasError) {
+                final err = snap.error;
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ErrorBanner(err is ApiException ? err.message : err.toString(),
+                        onRetry: () => setState(() => _future = context.read<BusProvider>().listBuses())),
+                  ),
+                );
+              }
+              final buses = snap.data!;
+              if (buses.isEmpty) {
+                return Center(child: Text('No buses available yet.', style: TextStyle(fontSize: 13.5, color: pal.muted)));
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: buses.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final b = buses[i];
+                  final running = b.activeTripId != null;
+                  final selected = b.id == current;
+                  return FadeSlideIn(
+                    index: i < 8 ? i : 0,
+                    child: BmCard(
+                      radius: 16,
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      borderColor: selected ? BrandColors.amber : null,
+                      onTap: _busy ? null : () => _pick(b),
+                      child: Row(children: [
+                        IconTile(
+                          icon: Icons.directions_bus_rounded,
+                          color: selected ? BrandColors.amber : (pal.dark ? BrandColors.indigo : BrandColors.ink),
+                          filled: selected,
+                          size: 40,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Row(children: [
+                              Flexible(
+                                child: Text(b.number,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: pal.text)),
+                              ),
+                              if (b.isDemo) ...[const SizedBox(width: 8), const DemoTag()],
+                            ]),
+                            const SizedBox(height: 2),
+                            Text('${b.routeName ?? 'No route'}${b.isMyRoute ? ' · your route' : ''}',
+                                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: pal.muted)),
+                          ]),
+                        ),
+                        const SizedBox(width: 8),
+                        selected
+                            ? const Icon(Icons.check_circle_rounded, color: BrandColors.green, size: 22)
+                            : PhaseChip(label: running ? 'RUNNING' : 'IDLE', level: running ? Level.good : Level.warn, pulse: running),
+                      ]),
+                    ),
+                  );
+                },
               );
             },
-          );
-        },
-      ),
+          ),
+        ),
+      ]),
     );
   }
 }
