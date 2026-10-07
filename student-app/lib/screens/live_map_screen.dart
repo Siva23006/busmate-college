@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/bus_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/status.dart';
+import '../widgets/app_bar.dart';
 import '../widgets/bus_map.dart';
 import '../widgets/common.dart';
 import '../widgets/journey.dart';
@@ -28,16 +29,8 @@ class LiveMapScreen extends StatelessWidget {
           right: 12,
           top: top + 8,
           child: Row(children: [
-            Material(
-              color: BrandColors.ink,
-              shape: const CircleBorder(),
-              elevation: 4,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-            const SizedBox(width: 10),
+            const BmBackButton(onMap: true),
+            const SizedBox(width: 2),
             Expanded(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),

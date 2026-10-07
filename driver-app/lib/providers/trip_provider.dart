@@ -9,6 +9,12 @@ import '../services/location_tracker.dart';
 class TripProvider extends ChangeNotifier {
   TripProvider(this.api) : tracker = LocationTracker(api) {
     tracker.addListener(notifyListeners);
+    // Trip ended on the server (e.g. by the admin): leave the trip screen.
+    tracker.onStoppedByServer = () {
+      activeTrip = null;
+      notifyListeners();
+      loadHome();
+    };
   }
 
   final ApiClient api;
@@ -63,8 +69,8 @@ class TripProvider extends ChangeNotifier {
       activeTrip = trip;
       activeBus = bus;
       notifyListeners();
+      // The screen may turn off: tracking runs in a background service (saves battery).
       await tracker.start(busId: bus.id, tripId: trip.id, token: api.token!);
-      WakelockPlus.enable().catchError((_) {});
     } finally {
       _starting = false;
     }
@@ -75,7 +81,6 @@ class TripProvider extends ChangeNotifier {
     final trip = activeTrip;
     if (trip == null || tracker.isRunning || _starting) return;
     await tracker.start(busId: trip.busId, tripId: trip.id, token: api.token!);
-    WakelockPlus.enable().catchError((_) {});
   }
 
   Future<Trip> endTrip() async {

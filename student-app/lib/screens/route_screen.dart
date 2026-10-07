@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../providers/bus_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
+import '../widgets/app_bar.dart';
 
 /// Route as a vertical timeline; the student's stop is highlighted. Tap a stop to make it "my stop".
 class RouteScreen extends StatelessWidget {
@@ -39,27 +40,26 @@ class RouteScreen extends StatelessWidget {
     final route = p.route;
     // Stops follow the running trip: the evening (From College) run lists them in reverse.
     final stops = p.travelStops;
-    final back = p.direction == fromCollege;
     final hint = Theme.of(context).hintColor;
 
     return Scaffold(
-      appBar: AppBar(title: Text(p.bus == null ? 'Route' : 'COLLEGE ${p.bus!.number}')),
+      appBar: bmAppBar(context, route?.name ?? 'Route', subtitle: p.bus == null ? null : 'Bus ${p.bus!.number}'),
       body: route == null
           ? const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No route assigned to this bus yet.')))
-          : ListView(padding: const EdgeInsets.all(20), children: [
-              Text(route.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-              if (route.start != null || route.destination != null)
-                Text(back ? '${route.destination ?? ''} → ${route.start ?? ''}' : '${route.start ?? ''} → ${route.destination ?? ''}',
-                    style: TextStyle(color: hint, fontSize: 16)),
-              if (p.direction != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text('${p.hasActiveTrip ? 'Current trip' : 'Last trip'}: ${directionLabel(p.direction)}',
-                      style: const TextStyle(color: BrandColors.amber, fontWeight: FontWeight.w800, fontSize: 15)),
-                ),
-              const SizedBox(height: 6),
-              Text('Tap a stop to set it as your stop.', style: TextStyle(color: hint)),
-              const SizedBox(height: 16),
+          : ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 28), children: [
+              // Daily timings set by the transport office
+              Row(children: [
+                Expanded(child: _RunCard(morning: true, route: route, live: p.hasActiveTrip && p.direction != fromCollege)),
+                const SizedBox(width: 10),
+                Expanded(child: _RunCard(morning: false, route: route, live: p.hasActiveTrip && p.direction == fromCollege)),
+              ]),
+              const SizedBox(height: 18),
+              Row(children: [
+                Text(p.hasActiveTrip ? 'STOPS ON THIS TRIP' : 'STOPS', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.4)),
+                const Spacer(),
+                Text('Tap a stop to make it yours', style: TextStyle(fontSize: 12, color: hint)),
+              ]),
+              const SizedBox(height: 8),
               for (var i = 0; i < stops.length; i++)
                 _StopTile(
                   stop: stops[i],
@@ -139,6 +139,49 @@ class _StopTile extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+
+/// Morning or evening run: from -> to and the departure time set by the admin.
+class _RunCard extends StatelessWidget {
+  const _RunCard({required this.morning, required this.route, this.live = false});
+  final bool morning;
+  final RouteInfo route;
+  final bool live;
+
+  @override
+  Widget build(BuildContext context) {
+    final dir = morning ? toCollege : fromCollege;
+    final fg = morning ? BrandColors.ink : Colors.white;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: morning ? BrandColors.amber : BrandColors.ink3,
+        borderRadius: BorderRadius.circular(20),
+        border: live ? Border.all(color: BrandColors.green, width: 3) : null,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(morning ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded, color: fg, size: 18),
+          const SizedBox(width: 6),
+          Text(morning ? 'MORNING' : 'EVENING', style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+          const Spacer(),
+          if (live)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: BrandColors.green, borderRadius: BorderRadius.circular(8)),
+              child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        Text(route.timeFor(dir) == null ? '--:--' : clock12(route.timeFor(dir)),
+            style: TextStyle(color: fg, fontSize: 24, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 4),
+        Text('${route.fromFor(dir)} → ${route.toFor(dir)}',
+            maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w700)),
+      ]),
     );
   }
 }

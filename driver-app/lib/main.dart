@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/session_provider.dart';
@@ -12,6 +13,8 @@ import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Lets the background trip-tracking service send GPS / ETA updates to the screen.
+  FlutterForegroundTask.initCommunicationPort();
   final session = SessionProvider();
   runApp(
     MultiProvider(

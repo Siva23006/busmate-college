@@ -17,6 +17,7 @@ dependencies:
   connectivity_plus: ^6.1.0
   flutter_secure_storage: ^9.2.2
   wakelock_plus: ^1.2.8
+  flutter_foreground_task: ^9.2.2 # background GPS that survives swiping the app away
   google_maps_flutter: ^2.18.1
 dev_dependencies:
   flutter_test:

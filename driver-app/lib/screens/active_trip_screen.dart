@@ -23,14 +23,12 @@ class ActiveTripScreen extends StatefulWidget {
 }
 
 class _ActiveTripScreenState extends State<ActiveTripScreen> {
-  Timer? _clock;
   bool _ending = false;
   String? _resumeError;
 
   @override
   void initState() {
     super.initState();
-    _clock = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
     // After an app restart the trip is still active on the server: restart GPS.
     WidgetsBinding.instance.addPostFrameCallback((_) => _resume());
   }
@@ -46,11 +44,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _clock?.cancel();
-    super.dispose();
-  }
 
   /// Called after END TRIP has been held down (the hold is the confirmation).
   Future<void> _end() async {
@@ -75,7 +68,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     final bus = trips.activeBus ?? trips.busById(trip.busId);
     final route = bus?.route;
     final fix = t.lastFix;
-    final elapsed = trip.startTime == null ? Duration.zero : DateTime.now().difference(trip.startTime!);
     final speedKmh = fix == null || fix.speed < 0 ? null : (fix.speed * 3.6).round();
     final dark = Theme.of(context).brightness == Brightness.dark;
     final hint = Theme.of(context).hintColor;
@@ -211,8 +203,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(color: BrandColors.ink.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(18)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text(durationText(elapsed),
-                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, fontFeatures: [FontFeature.tabularFigures()])),
+                    _Elapsed(trip.startTime),
                     Text('since ${clockTime(trip.startTime)}', style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
                   ]),
                 ),
@@ -330,26 +321,53 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
 }
 
 /// Slowly pulsing green dot: tracking is live.
-class _PulseDot extends StatefulWidget {
+/// Static "live" dot (a constantly animating dot keeps the GPU busy and costs battery).
+class _PulseDot extends StatelessWidget {
   const _PulseDot();
+
   @override
-  State<_PulseDot> createState() => _PulseDotState();
+  Widget build(BuildContext context) {
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(
+        color: BrandColors.green,
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: BrandColors.green.withValues(alpha: 0.6), blurRadius: 6, spreadRadius: 1)],
+      ),
+    );
+  }
 }
 
-class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+/// Trip timer. Only this small text rebuilds every second (not the map), which saves battery.
+class _Elapsed extends StatefulWidget {
+  const _Elapsed(this.start);
+  final DateTime? start;
+  @override
+  State<_Elapsed> createState() => _ElapsedState();
+}
+
+class _ElapsedState extends State<_Elapsed> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
-    _c.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween<double>(begin: 0.35, end: 1).animate(_c),
-      child: Container(width: 12, height: 12, decoration: const BoxDecoration(color: BrandColors.green, shape: BoxShape.circle)),
-    );
+    final elapsed = widget.start == null ? Duration.zero : DateTime.now().difference(widget.start!);
+    return Text(durationText(elapsed),
+        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, fontFeatures: [FontFeature.tabularFigures()]));
   }
 }

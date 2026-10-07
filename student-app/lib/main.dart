@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'models/models.dart';
 import 'providers/bus_provider.dart';
 import 'providers/session_provider.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_shell.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
@@ -98,6 +98,6 @@ class _RootGateState extends State<RootGate> {
     final session = context.watch<SessionProvider>();
     if (!_splashDone || session.state == SessionState.unknown) return const SplashScreen();
     if (session.state == SessionState.loggedOut) return const LoginScreen();
-    return const HomeScreen();
+    return const MainShell();
   }
 }

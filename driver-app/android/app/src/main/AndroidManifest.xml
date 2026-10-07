@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Lets the driver exclude BusMate from battery saver so long trips are not cut off -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- usesCleartextTraffic lets the app talk to http://<laptop-ip>:4000 during development.
          For production use an https:// backend and you can remove it. -->
@@ -36,6 +38,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Background trip tracking: keeps sending GPS with the screen off or the app swiped away -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="location"
+            android:stopWithTask="false"
+            android:exported="false" />
         <!-- Google Maps key is injected from android/local.properties (MAPS_API_KEY=...), never committed -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"

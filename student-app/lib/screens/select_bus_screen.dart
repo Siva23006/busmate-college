@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../widgets/app_bar.dart';
+
 import '../core/api_client.dart';
 import '../models/models.dart';
 import '../providers/bus_provider.dart';
@@ -38,7 +40,7 @@ class _SelectBusScreenState extends State<SelectBusScreen> {
   Widget build(BuildContext context) {
     final current = context.watch<BusProvider>().bus?.id;
     return Scaffold(
-      appBar: AppBar(title: const Text('Select bus')),
+      appBar: bmAppBar(context, 'Select your bus', subtitle: 'Choose the bus you travel on'),
       body: FutureBuilder<List<BusInfo>>(
         future: _future,
         builder: (context, snap) {

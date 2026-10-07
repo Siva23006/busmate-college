@@ -10,10 +10,8 @@ import '../widgets/bus_map.dart';
 import '../widgets/common.dart';
 import '../widgets/journey.dart';
 import 'live_map_screen.dart';
-import 'notifications_screen.dart';
-import 'route_screen.dart';
+import 'main_shell.dart';
 import 'select_bus_screen.dart';
-import 'settings_screen.dart';
 
 /// Map-first home: the live Google map fills the screen; a sheet slides over it with the
 /// answer the student needs in two seconds (status + ETA to my stop), then the journey.
@@ -153,7 +151,7 @@ class HomeScreen extends StatelessWidget {
           title: const Text('My stop', style: TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Text(p.myStopName ?? 'Tap to choose your stop'),
           trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => open(const RouteScreen()),
+          onTap: () => MainShell.tab.value = 1,
         ),
       ),
       const SizedBox(height: 18),
@@ -221,7 +219,7 @@ class _TopBar extends StatelessWidget {
         ),
         IconButton(
           tooltip: 'Notifications',
-          onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const NotificationsScreen())),
+          onPressed: () => MainShell.tab.value = 2,
           icon: Badge(
             isLabelVisible: p.unread > 0,
             label: Text('${p.unread}'),
@@ -229,9 +227,9 @@ class _TopBar extends StatelessWidget {
           ),
         ),
         IconButton(
-          tooltip: 'Settings',
-          onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const SettingsScreen())),
-          icon: const Icon(Icons.settings_rounded, color: Colors.white),
+          tooltip: 'Profile',
+          onPressed: () => MainShell.tab.value = 3,
+          icon: const Icon(Icons.person_rounded, color: Colors.white),
         ),
       ]),
     );

@@ -1,14 +1,14 @@
 import 'dart:async';
-import 'dart:collection';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../core/api_client.dart';
 import '../core/config.dart';
 import '../utils/accuracy.dart';
+import 'tracking_task.dart';
 
 enum GpsState { connected, weak, unavailable }
 enum NetState { connected, unstable, offline }
@@ -23,39 +23,65 @@ class TrackingStartException implements Exception {
   String toString() => message;
 }
 
-/// Collects real GPS fixes during a trip and sends them to the backend.
+/// One GPS reading as shown on screen. speed / heading are -1 when unknown.
+class GpsFix {
+  const GpsFix({required this.latitude, required this.longitude, required this.accuracy, this.speed = -1, this.heading = -1, required this.timestamp});
+  final double latitude;
+  final double longitude;
+  final double accuracy;
+  final double speed; // m/s
+  final double heading; // degrees
+  final DateTime timestamp;
+
+  factory GpsFix.fromPosition(Position p) =>
+      GpsFix(latitude: p.latitude, longitude: p.longitude, accuracy: p.accuracy, speed: p.speed, heading: p.heading, timestamp: p.timestamp);
+
+  static GpsFix? fromMessage(Map m) {
+    final lat = m['lat'], lng = m['lng'];
+    if (lat is! num || lng is! num) return null;
+    double d(Object? v, double fallback) => v is num ? v.toDouble() : fallback;
+    final ts = m['ts'];
+    return GpsFix(
+      latitude: lat.toDouble(),
+      longitude: lng.toDouble(),
+      accuracy: d(m['accuracy'], 9999),
+      speed: d(m['speed'], -1),
+      heading: d(m['heading'], -1),
+      timestamp: ts is int ? DateTime.fromMillisecondsSinceEpoch(ts) : DateTime.now(),
+    );
+  }
+}
+
+/// Screen-side view of trip tracking.
 ///
-/// - Uses an Android foreground service (persistent notification) so tracking
-///   continues when the screen is off or the app is in the background.
-/// - Sends over Socket.IO; falls back to REST; queues points while offline and
-///   sends them when the connection returns.
-/// - Never sends mock (fake) locations.
+/// The GPS itself runs in a background service ([TrackingTaskHandler]) with a "Trip active"
+/// notification, so tracking continues with the screen off, in other apps, and after the
+/// app is swiped away. This class starts/stops that service and shows what it reports.
 class LocationTracker extends ChangeNotifier {
   LocationTracker(this.api);
 
   final ApiClient api;
 
-  Position? lastFix;
+  /// Called when the server ended tracking (trip finished elsewhere, or logged out).
+  VoidCallback? onStoppedByServer;
+
+  GpsFix? lastFix;
   DateTime? lastFixAt;
 
   /// First GPS fix of this trip: where the driver started (green START pin).
-  Position? startFix;
+  GpsFix? startFix;
 
   /// Phone's last known position, shown on the map until the first live fix arrives (never sent).
-  Position? lastKnown;
+  GpsFix? lastKnown;
 
-  /// When tracking started, to show helpful hints if GPS takes long.
   DateTime? startedAt;
-  DateTime? lastSentAt;
   DateTime? lastAckAt;
   int sentCount = 0;
+  int queuedCount = 0;
   bool mockDetected = false;
   bool hasConnectivity = true;
-  bool socketConnected = false;
   String? lastServerMessage;
 
-  /// Next stop according to the server's ETA (from the last acknowledged point).
-  /// nextStopKnown is false until the first such answer arrives.
   String? nextStopName;
   bool nextStopKnown = false;
   int? nextStopEtaSeconds;
@@ -64,17 +90,15 @@ class LocationTracker extends ChangeNotifier {
   int stopsPassed = 0;
   int stopsTotal = 0;
 
-  int? _busId;
   int? _tripId;
-  io.Socket? _socket;
-  StreamSubscription<Position>? _positionSub;
+  bool _listening = false;
   StreamSubscription<List<ConnectivityResult>>? _connSub;
   Timer? _ticker;
-  final Queue<Map<String, dynamic>> _pending = Queue();
-  bool _flushing = false;
 
   bool get isRunning => _tripId != null;
-  int get queuedCount => _pending.length;
+
+  /// When the server last accepted a point from this phone.
+  DateTime? lastSentAt;
 
   GpsState get gpsState {
     if (lastFixAt == null || DateTime.now().difference(lastFixAt!) > AppConfig.gpsStaleAfter) return GpsState.unavailable;
@@ -84,13 +108,16 @@ class LocationTracker extends ChangeNotifier {
 
   NetState get netState {
     if (!hasConnectivity) return NetState.offline;
-    final ackFresh = lastAckAt != null && DateTime.now().difference(lastAckAt!) < AppConfig.ackStaleAfter;
-    if (_pending.isNotEmpty || (!socketConnected && !ackFresh)) return NetState.unstable;
+    // A standing bus sends a heartbeat every 20 s, so allow a little longer than that.
+    final ackFresh = lastAckAt != null && DateTime.now().difference(lastAckAt!) < const Duration(seconds: 45);
+    if (queuedCount > 0) return NetState.unstable;
     if (isRunning && sentCount > 0 && !ackFresh) return NetState.unstable;
     return NetState.connected;
   }
 
-  /// Steps 1-3 of the spec: permission, GPS on, start the location service.
+  int get secondsWithoutFix => lastFix != null || startedAt == null ? 0 : DateTime.now().difference(startedAt!).inSeconds;
+
+  /// Permission, GPS on, notification permission and the "don't kill me" battery setting.
   static Future<void> ensureReady() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw TrackingStartException('GPS is turned off. Turn on Location to start the trip.', canOpenSettings: true);
@@ -104,18 +131,99 @@ class LocationTracker extends ChangeNotifier {
       throw TrackingStartException('Location permission is blocked. Allow it in App settings > Permissions > Location.',
           canOpenSettings: true, isAppSettings: true);
     }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        // The "Trip active" notification is what keeps tracking alive in the background.
+        if (await FlutterForegroundTask.checkNotificationPermission() != NotificationPermission.granted) {
+          await FlutterForegroundTask.requestNotificationPermission();
+        }
+        // Stops the phone's battery saver from killing tracking during a long trip.
+        if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+          await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+        }
+      } catch (_) {/* not fatal: tracking still works while the app is open */}
+    }
+  }
+
+  static void _initService() {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'busmate_trip',
+        channelName: 'Trip tracking',
+        channelDescription: 'Shown while a trip is active and the bus location is being shared.',
+        onlyAlertOnce: true,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(showNotification: true, playSound: false),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(10000), // heartbeat / retry every 10 s
+        autoRunOnBoot: false,
+        allowWakeLock: true, // keeps the CPU (not the screen) awake while the trip runs
+        allowWifiLock: false,
+        stopWithTask: false, // keep tracking when the app is swiped away from recent apps
+      ),
+    );
   }
 
   Future<void> start({required int busId, required int tripId, required String token}) async {
     await ensureReady();
-    await stop();
-    _busId = busId;
     _tripId = tripId;
-    startedAt = DateTime.now();
-    startFix = null;
-    lastKnown = null;
+    startedAt ??= DateTime.now();
+    _reset();
+
+    _initService();
+    _listen();
+
+    final running = await FlutterForegroundTask.isRunningService;
+    final savedTrip = await FlutterForegroundTask.getData<int>(key: TrackingKeys.tripId);
+    if (!(running && savedTrip == tripId)) {
+      // Not yet tracking this trip in the background: (re)start the service for it.
+      await FlutterForegroundTask.saveData(key: TrackingKeys.apiUrl, value: AppConfig.apiUrl);
+      await FlutterForegroundTask.saveData(key: TrackingKeys.token, value: token);
+      await FlutterForegroundTask.saveData(key: TrackingKeys.busId, value: busId);
+      await FlutterForegroundTask.saveData(key: TrackingKeys.tripId, value: tripId);
+      final ServiceRequestResult result = running
+          ? await FlutterForegroundTask.restartService()
+          : await FlutterForegroundTask.startService(
+              serviceId: 4242,
+              serviceTypes: [ForegroundServiceTypes.location],
+              notificationTitle: 'BusMate: trip active',
+              notificationText: 'Sharing bus location with students. End the trip to stop.',
+              callback: startTrackingCallback,
+            );
+      if (result is ServiceRequestFailure) {
+        _tripId = null;
+        throw TrackingStartException('Could not start background tracking: ${result.error}');
+      }
+    }
+
+    final initial = await Connectivity().checkConnectivity();
+    hasConnectivity = !initial.contains(ConnectivityResult.none);
+    await _connSub?.cancel();
+    _connSub = Connectivity().onConnectivityChanged.listen((results) {
+      hasConnectivity = !results.contains(ConnectivityResult.none);
+      notifyListeners();
+    });
+
+    // Refresh "GPS stale / network unstable" labels while the screen is visible.
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 5), (_) => notifyListeners());
+    notifyListeners();
+
+    // Show the phone's last known spot right away (display only, never sent).
+    try {
+      final known = await Geolocator.getLastKnownPosition();
+      if (known != null && lastFix == null) {
+        lastKnown = GpsFix.fromPosition(known);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  void _reset() {
     sentCount = 0;
+    queuedCount = 0;
     mockDetected = false;
+    lastServerMessage = null;
     nextStopName = null;
     nextStopKnown = false;
     nextStopEtaSeconds = null;
@@ -123,211 +231,89 @@ class LocationTracker extends ChangeNotifier {
     destinationEtaSeconds = null;
     stopsPassed = 0;
     stopsTotal = 0;
-
-    _connectSocket(token);
-
-    final initial = await Connectivity().checkConnectivity();
-    hasConnectivity = !initial.contains(ConnectivityResult.none);
-    _connSub = Connectivity().onConnectivityChanged.listen((results) {
-      final online = !results.contains(ConnectivityResult.none);
-      if (online && !hasConnectivity) _flush();
-      hasConnectivity = online;
-      notifyListeners();
-    });
-
-    final settings = defaultTargetPlatform == TargetPlatform.android
-        ? AndroidSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 0,
-            intervalDuration: AppConfig.locationInterval,
-            foregroundNotificationConfig: const ForegroundNotificationConfig(
-              notificationTitle: 'BusMate: trip active',
-              notificationText: 'Sharing bus location with students. End the trip to stop.',
-              enableWakeLock: true,
-              setOngoing: true,
-            ),
-          )
-        : const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 0);
-
-    _positionSub = Geolocator.getPositionStream(locationSettings: settings).listen(
-      _onPosition,
-      onError: (Object e) {
-        lastServerMessage = 'GPS error: please check that Location is on.';
-        notifyListeners();
-      },
-    );
-
-    // Refresh status labels (GPS stale, network unstable) even with no new events.
-    _ticker = Timer.periodic(const Duration(seconds: 3), (_) => notifyListeners());
-    notifyListeners();
-    _warmUpGps();
   }
 
-  /// Gets a position quickly: the last known one for the map (display only), then one fresh fix,
-  /// so the bus appears in seconds instead of waiting for the first stream event.
-  Future<void> _warmUpGps() async {
-    try {
-      final known = await Geolocator.getLastKnownPosition();
-      if (known != null && lastFix == null && isRunning) {
-        lastKnown = known;
-        notifyListeners();
-      }
-    } catch (_) {}
-    try {
-      final fresh = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
-      );
-      if (lastFix == null && isRunning) _onPosition(fresh);
-    } catch (_) {
-      // No fix yet (indoors / weak signal). The position stream keeps trying.
-    }
+  void _listen() {
+    if (_listening) return;
+    FlutterForegroundTask.addTaskDataCallback(_onTaskData);
+    _listening = true;
   }
 
-  /// Seconds since tracking started without any GPS fix (0 once a fix arrived).
-  int get secondsWithoutFix => lastFix != null || startedAt == null ? 0 : DateTime.now().difference(startedAt!).inSeconds;
-
-  void _connectSocket(String token) {
-    final socket = io.io(
-      AppConfig.apiUrl,
-      io.OptionBuilder()
-          .setTransports(['websocket'])
-          .setAuth({'token': token})
-          .disableAutoConnect()
-          .enableReconnection()
-          .setReconnectionDelay(1000)
-          .setReconnectionDelayMax(5000)
-          .build(),
-    );
-    socket.onConnect((_) {
-      socketConnected = true;
-      notifyListeners();
-      _flush();
-    });
-    socket.onDisconnect((_) {
-      socketConnected = false;
-      notifyListeners();
-    });
-    socket.onConnectError((_) {
-      socketConnected = false;
-      notifyListeners();
-    });
-    socket.connect();
-    _socket = socket;
-  }
-
-  void _onPosition(Position p) {
-    if (p.isMocked) {
-      // Spec: never send fake GPS. Show a warning instead.
-      mockDetected = true;
-      notifyListeners();
-      return;
-    }
-    mockDetected = false;
-    lastFix = p;
-    lastFixAt = DateTime.now();
-    startFix ??= p;
-    final payload = <String, dynamic>{
-      'busId': _busId,
-      'tripId': _tripId,
-      'latitude': p.latitude,
-      'longitude': p.longitude,
-      'accuracy': p.accuracy,
-      'speed': p.speed >= 0 ? p.speed : null,
-      'heading': (p.heading >= 0 && p.heading <= 360) ? p.heading : null,
-      'timestamp': p.timestamp.millisecondsSinceEpoch,
-    };
-    _pending.add(payload);
-    while (_pending.length > 500) {
-      _pending.removeFirst(); // keep memory bounded on very long outages
+  void _onTaskData(Object data) {
+    if (data is! Map || !isRunning) return;
+    switch (data['type']) {
+      case 'fix':
+        final f = GpsFix.fromMessage(data);
+        if (f == null) return;
+        mockDetected = false;
+        lastFix = f;
+        lastFixAt = DateTime.now();
+        startFix ??= f;
+      case 'mock':
+        mockDetected = true;
+      case 'gpsError':
+        lastServerMessage = data['message'] as String?;
+      case 'queue':
+        queuedCount = (data['queued'] as num?)?.toInt() ?? 0;
+      case 'ack':
+        _handleAck(data);
+      case 'stopped':
+        lastServerMessage = data['message'] as String?;
+        _tripId = null;
+        onStoppedByServer?.call();
     }
     notifyListeners();
-    _flush();
   }
 
-  /// Sends queued points in order. One at a time so the server sees them in sequence.
-  Future<void> _flush() async {
-    if (_flushing || _pending.isEmpty || !isRunning) return;
-    _flushing = true;
-    try {
-      while (_pending.isNotEmpty && isRunning) {
-        final ok = await _send(_pending.first);
-        if (!ok) break;
-        _pending.removeFirst();
-        sentCount++;
-        lastSentAt = DateTime.now();
-        notifyListeners();
-      }
-    } finally {
-      _flushing = false;
-    }
-  }
-
-  Future<bool> _send(Map<String, dynamic> payload) async {
-    final socket = _socket;
-    if (socket != null && socket.connected) {
-      final completer = Completer<bool>();
-      socket.emitWithAck('driver:locationUpdate', payload, ack: (dynamic resp) {
-        final r = resp is Map ? resp : (resp is List && resp.isNotEmpty && resp.first is Map ? resp.first as Map : null);
-        _handleAck(r);
-        // throttled = server dropped it as too frequent; treat as delivered.
-        if (!completer.isCompleted) completer.complete(r != null);
-      });
-      return completer.future.timeout(const Duration(seconds: 10), onTimeout: () => false);
-    }
-    // REST fallback (e.g. networks that block WebSockets)
-    try {
-      final r = await api.post('/tracking/location', payload);
-      _handleAck({'ok': true, ...r});
-      return true;
-    } on ApiException catch (e) {
-      if (e.code == 'NETWORK' || e.code == 'TIMEOUT' || e.status >= 500 || e.status == 429) return false;
-      _handleAck({'ok': false, 'error': {'message': e.message}});
-      return true; // a rejected point (e.g. trip ended) must not block the queue
-    }
-  }
-
-  void _handleAck(Map? r) {
-    if (r == null) return;
+  void _handleAck(Map r) {
     lastAckAt = DateTime.now();
     if (r['ok'] == false) {
-      final err = r['error'];
-      lastServerMessage = err is Map ? err['message'] as String? : 'Location rejected by server.';
-    } else {
-      lastServerMessage = null;
-      final eta = r['eta'];
-      if (eta is Map) {
-        final next = eta['nextStop'];
-        nextStopName = next is Map ? next['stopName'] as String? : null;
-        nextStopEtaSeconds = next is Map && next['etaSeconds'] is num ? (next['etaSeconds'] as num).toInt() : null;
-        nextStopMeters = next is Map && next['remainingMeters'] is num ? (next['remainingMeters'] as num).toInt() : null;
-        final dest = eta['destination'];
-        destinationEtaSeconds = dest is Map && dest['etaSeconds'] is num ? (dest['etaSeconds'] as num).toInt() : null;
-        if (eta['stopsPassed'] is num) stopsPassed = (eta['stopsPassed'] as num).toInt();
-        if (eta['stopsTotal'] is num) stopsTotal = (eta['stopsTotal'] as num).toInt();
-        nextStopKnown = true;
-      }
+      lastServerMessage = r['message'] as String? ?? 'Location rejected by server.';
+      return;
+    }
+    sentCount++;
+    lastSentAt = DateTime.now();
+    lastServerMessage = null;
+    final eta = r['eta'];
+    if (eta is Map) {
+      final next = eta['nextStop'];
+      nextStopName = next is Map ? next['stopName'] as String? : null;
+      nextStopEtaSeconds = next is Map && next['etaSeconds'] is num ? (next['etaSeconds'] as num).toInt() : null;
+      nextStopMeters = next is Map && next['remainingMeters'] is num ? (next['remainingMeters'] as num).toInt() : null;
+      final dest = eta['destination'];
+      destinationEtaSeconds = dest is Map && dest['etaSeconds'] is num ? (dest['etaSeconds'] as num).toInt() : null;
+      if (eta['stopsPassed'] is num) stopsPassed = (eta['stopsPassed'] as num).toInt();
+      if (eta['stopsTotal'] is num) stopsTotal = (eta['stopsTotal'] as num).toInt();
+      nextStopKnown = true;
     }
   }
 
   Future<void> stop() async {
-    await _positionSub?.cancel();
-    await _connSub?.cancel();
-    _ticker?.cancel();
-    _socket?.dispose();
-    _positionSub = null;
-    _connSub = null;
-    _ticker = null;
-    _socket = null;
-    socketConnected = false;
     _tripId = null;
-    _busId = null;
-    _pending.clear();
+    _ticker?.cancel();
+    _ticker = null;
+    await _connSub?.cancel();
+    _connSub = null;
+    try {
+      await FlutterForegroundTask.removeData(key: TrackingKeys.tripId);
+      if (await FlutterForegroundTask.isRunningService) await FlutterForegroundTask.stopService();
+    } catch (_) {}
+    lastFix = null;
+    lastFixAt = null;
+    startFix = null;
+    lastKnown = null;
+    startedAt = null;
+    lastAckAt = null;
+    lastSentAt = null;
+    _reset();
     notifyListeners();
   }
 
   @override
   void dispose() {
-    stop();
+    if (_listening) FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
+    _ticker?.cancel();
+    _connSub?.cancel();
     super.dispose();
   }
 }
