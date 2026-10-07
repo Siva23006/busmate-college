@@ -1,7 +1,8 @@
 const db = require('../config/db');
 
 const SELECT = `
-  SELECT t.*, b.bus_number, r.route_name, u.name AS driver_name,
+  SELECT t.*, b.bus_number, r.route_name, r.start_location AS route_start, r.destination AS route_destination,
+         u.name AS driver_name,
          EXTRACT(EPOCH FROM (COALESCE(t.end_time, now()) - t.start_time))::int AS duration_seconds,
          (SELECT count(*)::int FROM trip_stop_events e WHERE e.trip_id = t.id AND e.arrived_at IS NOT NULL) AS stops_reached,
          (SELECT count(*)::int FROM stops s WHERE s.route_id = t.route_id) AS stops_total

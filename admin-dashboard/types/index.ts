@@ -30,6 +30,12 @@ export interface Bus {
   active_trip_start: string | null;
   active_trip_is_simulation: boolean | null;
   active_trip_direction: TripDirection | null;
+  trip_start_latitude?: number | null;
+  trip_start_longitude?: number | null;
+  route_start?: string | null;
+  route_destination?: string | null;
+  route_morning_time?: string | null;
+  route_evening_time?: string | null;
   latitude: number | null;
   longitude: number | null;
   accuracy: number | null;
@@ -59,6 +65,10 @@ export interface Route {
   path: [number, number][] | null;
   active: boolean;
   is_demo: boolean;
+  /** Morning run leaves the home area at this time ("HH:MM:SS"). */
+  morning_time?: string | null;
+  /** Evening run leaves the college at this time. */
+  evening_time?: string | null;
   stop_count?: number;
   buses?: { id: number; bus_number: string }[] | null;
   stops?: Stop[];
@@ -113,6 +123,10 @@ export interface Trip {
   duration_seconds: number | null;
   is_simulation: boolean;
   direction: TripDirection;
+  route_start?: string | null;
+  route_destination?: string | null;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
   stops_reached?: number;
   stops_total?: number;
 }
@@ -166,6 +180,8 @@ export interface LiveLocation {
   timestamp: string;
   isSimulation: boolean;
   atStopId: number | null;
+  /** Where this trip started (first good GPS fix). */
+  start?: { latitude: number; longitude: number } | null;
   eta: Eta | null;
 }
 

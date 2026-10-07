@@ -122,7 +122,7 @@ class HomeScreen extends StatelessWidget {
       const SizedBox(height: 12),
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         PhaseChip(label: phase, level: phaseLevel, large: true),
-        if (p.direction != null) _DirectionTag(p.direction!),
+        if (p.direction != null) _DirectionTag(p.direction!, p.route),
       ]),
       const SizedBox(height: 12),
       RouteHeader(p: p),
@@ -239,8 +239,9 @@ class _TopBar extends StatelessWidget {
 }
 
 class _DirectionTag extends StatelessWidget {
-  const _DirectionTag(this.direction);
+  const _DirectionTag(this.direction, this.route);
   final String direction;
+  final RouteInfo? route;
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +252,7 @@ class _DirectionTag extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(evening ? Icons.nights_stay_rounded : Icons.wb_sunny_rounded, size: 16, color: evening ? Colors.white : BrandColors.ink),
         const SizedBox(width: 6),
-        Text('${evening ? 'Evening' : 'Morning'} · ${directionLabel(direction)}',
+        Text('${evening ? 'Evening' : 'Morning'} · ${route == null ? directionLabel(direction) : 'to ${route!.toFor(direction)}'}',
             style: TextStyle(color: evening ? Colors.white : BrandColors.ink, fontWeight: FontWeight.w800, fontSize: 13)),
       ]),
     );

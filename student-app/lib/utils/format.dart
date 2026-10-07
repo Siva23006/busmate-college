@@ -32,3 +32,13 @@ String greeting() {
   final h = DateTime.now().hour;
   return h < 12 ? 'Good morning' : (h < 17 ? 'Good afternoon' : 'Good evening');
 }
+
+/// "07:30" -> "7:30 AM".
+String clock12(String? hhmm) {
+  if (hhmm == null) return '-';
+  final parts = hhmm.split(':');
+  final h = int.tryParse(parts[0]);
+  if (h == null || parts.length < 2) return hhmm;
+  final h12 = h % 12 == 0 ? 12 : h % 12;
+  return '$h12:${parts[1]} ${h < 12 ? 'AM' : 'PM'}';
+}

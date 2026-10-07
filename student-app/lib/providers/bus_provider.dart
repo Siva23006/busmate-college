@@ -39,6 +39,16 @@ class BusProvider extends ChangeNotifier {
   bool tripCompleted = false;
   String? _direction; // direction of the current (or just finished) trip
 
+  /// Where the driver started this trip, [lat, lng] (green START pin on the map).
+  List<double>? tripStart;
+
+  static List<double>? _readStart(Object? v) {
+    if (v is Map && v['latitude'] is num && v['longitude'] is num) {
+      return [(v['latitude'] as num).toDouble(), (v['longitude'] as num).toDouble()];
+    }
+    return null;
+  }
+
   // Notifications
   final List<AppNotification> notifications = [];
   final StreamController<AppNotification> _incoming = StreamController.broadcast();
@@ -175,6 +185,7 @@ class BusProvider extends ChangeNotifier {
       if (loc.busId != bus?.id) return;
       location = loc;
       _direction = loc.direction ?? _direction;
+      tripStart = _readStart(data['start']) ?? tripStart;
       final e = Eta.fromJson(data['eta']);
       if (e != null) eta = e;
       if (lastStatus == 'GPS_POOR' || lastStatus == 'OFFLINE') lastStatus = 'ACTIVE';
@@ -193,6 +204,7 @@ class BusProvider extends ChangeNotifier {
         tripCompleted = false;
         location = null;
         eta = null;
+        tripStart = null;
         _direction = data['direction'] as String? ?? toCollege;
         load();
       }
@@ -230,6 +242,8 @@ class BusProvider extends ChangeNotifier {
       if (loc is Map && bus?.activeTripId != null && loc['trip_id'] == bus?.activeTripId) {
         final l = LiveLocation.fromRow(Map<String, dynamic>.from(loc));
         if (location == null || l.timestamp.isAfter(location!.timestamp)) location = l;
+        tripStart = _readStart({'latitude': loc['start_latitude'], 'longitude': loc['start_longitude']}) ?? tripStart;
+        _direction = loc['direction'] as String? ?? _direction;
       }
       final e = Eta.fromJson(r['eta']);
       if (e != null) eta = e;
@@ -252,6 +266,7 @@ class BusProvider extends ChangeNotifier {
     _polling = true;
     try {
       final res = await api.get('/buses/${b.id}/location');
+      tripStart = _readStart(res['start']) ?? tripStart;
       final l = res['location'];
       if (l is Map && l['latitude'] != null) {
         final ts = DateTime.tryParse('${l['timestamp']}')?.toLocal() ?? DateTime.now();
@@ -324,6 +339,7 @@ class BusProvider extends ChangeNotifier {
     _direction = null;
     location = null;
     eta = null;
+    tripStart = null;
     lastStatus = null;
     await load();
   }

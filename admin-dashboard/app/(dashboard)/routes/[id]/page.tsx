@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ArrowLeft, MousePointerClick, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowLeft, ArrowRight, ArrowUpDown, CheckCircle2, Moon, MousePointerClick, Pencil, RefreshCw, Sun, Trash2 } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { routeApi, stopApi, type RoadRoute } from "@/services/busmate";
 import { errorMessage } from "@/lib/api";
+import { timeOfDay, tripEnds } from "@/lib/format";
 import type { Stop } from "@/types";
 import { FitBounds, GeofenceCircle, MapView, PinMarker, Polyline, StopMarker, routeLine, type LatLng } from "@/components/MapView";
 import { Badge, Button, Card, DemoBadge, ErrorBox, Field, Input, Modal, PageHeader, Skeleton } from "@/components/ui";
@@ -25,7 +26,7 @@ export default function RouteDetailPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editRoute, setEditRoute] = useState(false);
-  const [routeForm, setRouteForm] = useState({ route_name: "", start_location: "", destination: "", description: "" });
+  const [routeForm, setRouteForm] = useState({ route_name: "", start_location: "", destination: "", description: "", morning_time: "", evening_time: "" });
   const [regenerating, setRegenerating] = useState(false);
   // Shown when the road line could not be rebuilt (e.g. the routing service is unreachable).
   const [roadNote, setRoadNote] = useState<string | null>(null);
@@ -35,6 +36,20 @@ export default function RouteDetailPage() {
   const stops = useMemo(() => [...(r?.stops ?? [])].sort((a, b) => a.stop_order - b.stop_order), [r]);
   const line = useMemo(() => routeLine(r?.path, stops), [r, stops]);
   const hasRoad = (r?.path?.length ?? 0) >= 2;
+  const morning = tripEnds("TO_COLLEGE", r?.start_location, r?.destination);
+  const evening = tripEnds("FROM_COLLEGE", r?.start_location, r?.destination);
+  // Route setup checks shown to the admin.
+  const norm = (x?: string | null) => (x ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const similar = (a?: string | null, b?: string | null) => !!norm(a) && !!norm(b) && (norm(a).includes(norm(b)) || norm(b).includes(norm(a)));
+  const firstStop = stops[0]?.stop_name;
+  const lastStop = stops[stops.length - 1]?.stop_name;
+  const looksReversed = stops.length >= 2 && (similar(firstStop, r?.destination) || similar(lastStop, r?.start_location));
+  const checks: string[] = [];
+  if (r && !r.start_location) checks.push("Set the home area (e.g. Redhills): where the morning run starts and the evening run ends.");
+  if (r && !r.destination) checks.push("Set the college name (e.g. Dr. MGR University).");
+  if (r && (!r.morning_time || !r.evening_time)) checks.push("Set the morning and evening departure times.");
+  if (stops.length < 2) checks.push("Add at least 2 stops on the map: the home area first and the college last.");
+  if (looksReversed) checks.push(`The stops look reversed: the first stop is "${firstStop}" and the last is "${lastStop}". Stops must be in morning order (home area first, college last).`);
 
   function onMapClick(p: LatLng) {
     setPicked(p);
@@ -88,9 +103,26 @@ export default function RouteDetailPage() {
       await routeApi.update(id, extra ?? {
         route_name: routeForm.route_name.trim(), start_location: routeForm.start_location.trim() || null,
         destination: routeForm.destination.trim() || null, description: routeForm.description.trim() || null,
+        morning_time: routeForm.morning_time || null, evening_time: routeForm.evening_time || null,
       });
       setEditRoute(false); route.reload();
     } catch (err) { alert(errorMessage(err)); }
+  }
+
+  /** Stops must run home area -> college. If they were added the other way round, flip them. */
+  async function reverseStops() {
+    if (!confirm("Reverse the stop order? The first stop should be the home area and the last stop the college.")) return;
+    try { noteRoad((await routeApi.reorder(id, [...stops].reverse().map((s) => s.id))).roadRoute); route.reload(); }
+    catch (err) { alert(errorMessage(err)); }
+  }
+
+  function openEditRoute() {
+    if (!r) return;
+    setRouteForm({
+      route_name: r.route_name, start_location: r.start_location ?? "", destination: r.destination ?? "",
+      description: r.description ?? "", morning_time: r.morning_time?.slice(0, 5) ?? "", evening_time: r.evening_time?.slice(0, 5) ?? "",
+    });
+    setEditRoute(true);
   }
 
   async function deleteRoute() {
@@ -107,15 +139,33 @@ export default function RouteDetailPage() {
   return (
     <>
       <Link href="/routes" className="text-muted mb-3 inline-flex items-center gap-1 text-sm hover:underline"><ArrowLeft className="h-4 w-4" /> Routes</Link>
-      <PageHeader title={r.route_name} subtitle={`${r.start_location ?? "Start"} → ${r.destination ?? "Destination"}`}
+      <PageHeader title={r.route_name} subtitle={`Morning ${morning.from} → ${morning.to} · Evening ${evening.from} → ${evening.to}`}
         actions={<>
           {r.is_demo && <DemoBadge />}
           <Badge tone={r.active ? "green" : "slate"} dot>{r.active ? "Active" : "Disabled"}</Badge>
 <Button variant="secondary" loading={regenerating} disabled={stops.length < 2} onClick={regenerateRoad}><RefreshCw className="h-4 w-4" /> Regenerate road route</Button>
-          <Button variant="secondary" onClick={() => { setRouteForm({ route_name: r.route_name, start_location: r.start_location ?? "", destination: r.destination ?? "", description: r.description ?? "" }); setEditRoute(true); }}>Edit route</Button>
+          <Button variant="secondary" onClick={openEditRoute}>Edit route & times</Button>
           <Button variant="secondary" onClick={() => saveRoute({ active: !r.active })}>{r.active ? "Disable" : "Enable"}</Button>
           <Button variant="danger" onClick={deleteRoute}>Delete</Button>
         </>} />
+
+      {/* Daily runs: what the driver and students will see */}
+      <div className="mb-4 grid gap-3 md:grid-cols-2">
+        <RunCard icon={Sun} title="Morning run" time={r.morning_time} from={morning.from} to={morning.to} tone="amber" />
+        <RunCard icon={Moon} title="Evening run" time={r.evening_time} from={evening.from} to={evening.to} tone="ink" />
+      </div>
+      {checks.length > 0 ? (
+        <Card className="mb-4 border-amber-400/60 p-4">
+          <div className="mb-2 flex items-center gap-2 font-bold text-amber-600"><AlertTriangle className="h-5 w-5" /> Finish setting up this route</div>
+          <ul className="list-disc space-y-1 pl-6 text-sm">{checks.map((c) => <li key={c}>{c}</li>)}</ul>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(!r.start_location || !r.destination || !r.morning_time || !r.evening_time) && <Button variant="secondary" onClick={openEditRoute}>Set home area, college & times</Button>}
+            {looksReversed && <Button onClick={reverseStops}><ArrowUpDown className="h-4 w-4" /> Reverse stop order</Button>}
+          </div>
+        </Card>
+      ) : (
+        <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-green-600"><CheckCircle2 className="h-4 w-4" /> Route is ready: drivers and students will see these place names and times.</div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_400px]">
         <Card className="relative h-[560px] overflow-hidden p-0">
@@ -141,7 +191,7 @@ export default function RouteDetailPage() {
             <Button variant="secondary" className="py-1.5 text-xs" onClick={() => { setEditingStop(null); setForm(emptyStop); setStopOpen(true); }}>Add manually</Button>
           </div>
           <ol className="flex-1 divide-y divide-[var(--border)] overflow-y-auto">
-            {!stops.length && <li className="text-muted p-6 text-center text-sm">No stops yet. Click the map to add the first stop. The last stop should be the college.</li>}
+            {!stops.length && <li className="text-muted p-6 text-center text-sm">No stops yet. Click the map to add stops in <b>morning order</b>: first the home area (e.g. Redhills), then each pickup point, and <b>last the college</b>. The evening run uses the same stops in reverse automatically.</li>}
             {stops.map((s, i) => (
               <li key={s.id} className="flex items-center gap-3 px-4 py-3">
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink-900 text-xs font-bold text-white dark:bg-amber-brand dark:text-ink-950">{s.stop_order}</span>
@@ -174,15 +224,32 @@ export default function RouteDetailPage() {
         {!editingStop && <p className="text-muted text-xs">New stops are added at the end. Use the arrows to reorder.</p>}
       </Modal>
 
-      <Modal open={editRoute} title="Edit route" onClose={() => setEditRoute(false)}
+      <Modal open={editRoute} title="Route, place names & times" onClose={() => setEditRoute(false)}
         footer={<><Button variant="secondary" onClick={() => setEditRoute(false)}>Cancel</Button><Button onClick={() => saveRoute()}>Save</Button></>}>
         <Field label="Route name"><Input value={routeForm.route_name} onChange={(e) => setRouteForm((f) => ({ ...f, route_name: e.target.value }))} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Start location"><Input value={routeForm.start_location} onChange={(e) => setRouteForm((f) => ({ ...f, start_location: e.target.value }))} /></Field>
-          <Field label="Destination"><Input value={routeForm.destination} onChange={(e) => setRouteForm((f) => ({ ...f, destination: e.target.value }))} /></Field>
+          <Field label="Home area" hint="Morning run starts here, evening run ends here"><Input value={routeForm.start_location} placeholder="Redhills" onChange={(e) => setRouteForm((f) => ({ ...f, start_location: e.target.value }))} /></Field>
+          <Field label="College" hint="Morning run ends here, evening run starts here"><Input value={routeForm.destination} placeholder="Dr. MGR University" onChange={(e) => setRouteForm((f) => ({ ...f, destination: e.target.value }))} /></Field>
+          <Field label="Morning run leaves home area at"><Input type="time" value={routeForm.morning_time} onChange={(e) => setRouteForm((f) => ({ ...f, morning_time: e.target.value }))} /></Field>
+          <Field label="Evening run leaves college at"><Input type="time" value={routeForm.evening_time} onChange={(e) => setRouteForm((f) => ({ ...f, evening_time: e.target.value }))} /></Field>
         </div>
+        <p className="text-muted text-xs">Preview: Morning {routeForm.start_location || "Home area"} → {routeForm.destination || "College"} · Evening {routeForm.destination || "College"} → {routeForm.start_location || "Home area"}</p>
         <Field label="Description"><Input value={routeForm.description} onChange={(e) => setRouteForm((f) => ({ ...f, description: e.target.value }))} /></Field>
       </Modal>
     </>
+  );
+}
+
+function RunCard({ icon: Icon, title, time, from, to, tone }: { icon: typeof Sun; title: string; time?: string | null; from: string; to: string; tone: "amber" | "ink" }) {
+  return (
+    <Card className={tone === "amber" ? "bg-amber-brand p-4 text-ink-950" : "bg-ink-900 p-4 text-white"}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><Icon className="h-4 w-4" /> {title}</div>
+        <div className="text-lg font-extrabold">{time ? timeOfDay(time) : "Time not set"}</div>
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-xl font-extrabold">
+        <span className="truncate">{from}</span><ArrowRight className="h-5 w-5 shrink-0" /><span className="truncate">{to}</span>
+      </div>
+    </Card>
   );
 }

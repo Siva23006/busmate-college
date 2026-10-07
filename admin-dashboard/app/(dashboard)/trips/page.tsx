@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { busApi, tripApi } from "@/services/busmate";
-import { clock, directionLabel, duration, km } from "@/lib/format";
+import { clock, duration, km, tripTitle } from "@/lib/format";
 import type { Trip } from "@/types";
 import { Badge, Button, Card, DemoBadge, EmptyState, ErrorBox, Input, PageHeader, Select, Table, TableSkeleton, Td, type Tone } from "@/components/ui";
 
@@ -12,7 +12,7 @@ const STATUS_TONE: Record<Trip["status"], Tone> = { ACTIVE: "green", COMPLETED: 
 
 function exportCsv(trips: Trip[]) {
   const head = ["Trip ID", "Date", "Bus", "Driver", "Route", "Direction", "Start", "End", "Duration (min)", "Distance (km)", "Status", "Simulation"];
-  const rows = trips.map((t) => [t.id, t.trip_date, t.bus_number, t.driver_name ?? "", t.route_name ?? "", directionLabel(t.direction), t.start_time ?? "", t.end_time ?? "",
+  const rows = trips.map((t) => [t.id, t.trip_date, t.bus_number, t.driver_name ?? "", t.route_name ?? "", tripTitle(t.direction, t.route_start, t.route_destination), t.start_time ?? "", t.end_time ?? "",
     t.duration_seconds != null ? Math.round(t.duration_seconds / 60) : "", t.distance_meters != null ? (t.distance_meters / 1000).toFixed(2) : "", t.status, t.is_simulation ? "DEMO" : ""]);
   const csv = [head, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -49,7 +49,7 @@ export default function TripsPage() {
                 <Td className="font-semibold">{t.bus_number}</Td>
                 <Td>{t.driver_name ?? "-"}</Td>
                 <Td>{t.route_name ?? "-"}</Td>
-                <Td>{directionLabel(t.direction)}</Td>
+                <Td>{tripTitle(t.direction, t.route_start, t.route_destination)}</Td>
                 <Td>{clock(t.start_time)}</Td>
                 <Td>{clock(t.end_time)}</Td>
                 <Td>{duration(t.duration_seconds)}</Td>

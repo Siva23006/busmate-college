@@ -5,6 +5,7 @@ const db = require('./config/db');
 const { initSockets } = require('./sockets');
 const notificationService = require('./services/notificationService');
 const offlineMonitor = require('./services/offlineMonitor');
+const { runMigrations } = require('./config/migrations');
 
 async function main() {
   try {
@@ -14,6 +15,13 @@ async function main() {
     console.error('[db] could not connect:', err.message);
     console.error('     Check DATABASE_URL in backend/.env, then run: npm run db:migrate');
     process.exit(1);
+  }
+
+  // Keep the database schema up to date on every start (safe to run again and again).
+  try {
+    await runMigrations();
+  } catch (err) {
+    console.error('[migrate] failed:', err.message);
   }
 
   notificationService.initFirebase();

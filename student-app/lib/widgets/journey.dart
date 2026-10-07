@@ -5,7 +5,8 @@ import '../providers/bus_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 
-/// FROM -> TO line for the current trip (e.g. Gummidipoondi -> College, or the reverse in the evening).
+/// FROM -> TO line for the current trip with the admin's place names
+/// (e.g. Redhills -> Dr. MGR University in the morning, the reverse in the evening).
 class RouteHeader extends StatelessWidget {
   const RouteHeader({super.key, required this.p, this.onDark = false});
   final BusProvider p;
@@ -13,19 +14,30 @@ class RouteHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stops = p.hasActiveTrip ? p.travelStops : (p.route?.stops ?? const <StopInfo>[]);
-    final from = stops.isNotEmpty ? stops.first.name : (p.route?.start ?? 'Start');
-    final to = stops.isNotEmpty ? stops.last.name : (p.route?.destination ?? 'College');
+    final r = p.route;
+    // Before a trip starts, show the run that is next by time of day.
+    final dir = p.direction ?? (DateTime.now().hour < 12 ? toCollege : fromCollege);
+    final from = r?.fromFor(dir) ?? 'Start';
+    final to = r?.toFor(dir) ?? 'College';
+    final time = r?.timeFor(dir);
     final color = onDark ? Colors.white : Theme.of(context).colorScheme.onSurface;
     TextStyle style() => TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color);
-    return Row(children: [
-      const Icon(Icons.trip_origin_rounded, size: 16, color: BrandColors.green),
-      const SizedBox(width: 6),
-      Flexible(child: Text(from, maxLines: 1, overflow: TextOverflow.ellipsis, style: style())),
-      const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Icon(Icons.arrow_forward_rounded, size: 18, color: BrandColors.amber)),
-      const Icon(Icons.flag_rounded, size: 16, color: BrandColors.amber),
-      const SizedBox(width: 6),
-      Flexible(child: Text(to, maxLines: 1, overflow: TextOverflow.ellipsis, style: style())),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.trip_origin_rounded, size: 16, color: BrandColors.green),
+        const SizedBox(width: 6),
+        Flexible(child: Text(from, maxLines: 1, overflow: TextOverflow.ellipsis, style: style())),
+        const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Icon(Icons.arrow_forward_rounded, size: 18, color: BrandColors.amber)),
+        const Icon(Icons.flag_rounded, size: 16, color: BrandColors.amber),
+        const SizedBox(width: 6),
+        Flexible(child: Text(to, maxLines: 1, overflow: TextOverflow.ellipsis, style: style())),
+      ]),
+      if (!p.hasActiveTrip && time != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 22),
+          child: Text('${dir == fromCollege ? 'Evening' : 'Morning'} bus leaves at ${clock12(time)}',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Theme.of(context).hintColor)),
+        ),
     ]);
   }
 }

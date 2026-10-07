@@ -44,6 +44,8 @@ const routeCreate = z.object({
   destination: optText(200),
   path: z.array(z.tuple([lat, lng])).min(2).max(5000).optional().nullable(),
   active: z.boolean().optional(),
+  morning_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Use HH:MM').optional().nullable(),
+  evening_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Use HH:MM').optional().nullable(),
 });
 const routeUpdate = routeCreate.partial();
 

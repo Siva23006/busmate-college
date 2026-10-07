@@ -1,7 +1,7 @@
 "use client";
 // Google Maps building blocks (via @vis.gl/react-google-maps).
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { APIProvider, AdvancedMarker, Map, useMap } from "@vis.gl/react-google-maps";
+import { APIProvider, AdvancedMarker, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { MapPinOff } from "lucide-react";
 import { GOOGLE_MAPS_API_KEY, GOOGLE_MAP_ID } from "@/lib/config";
 import type { Stop } from "@/types";
@@ -165,6 +165,41 @@ export function PinMarker({ position }: { position: LatLng }) {
   return (
     <AdvancedMarker position={position} zIndex={200}>
       <div className="h-4 w-4 rounded-full border-2 border-white bg-red-500 shadow" />
+    </AdvancedMarker>
+  );
+}
+
+/**
+ * Green START pin: where the driver actually started the trip (first good GPS fix).
+ * Also looks up the place name (Google Geocoding) and reports it with onAddress.
+ */
+export function StartMarker({ position, label = "START", onAddress }: { position: LatLng; label?: string; onAddress?: (address: string | null) => void }) {
+  const geocoding = useMapsLibrary("geocoding");
+  const [address, setAddress] = useState<string | null>(null);
+  const key = `${position.lat.toFixed(4)},${position.lng.toFixed(4)}`;
+  useEffect(() => {
+    if (!geocoding) return;
+    let cancelled = false;
+    new geocoding.Geocoder()
+      .geocode({ location: position })
+      .then(({ results }: google.maps.GeocoderResponse) => {
+        if (cancelled) return;
+        // Prefer a short "area, city" name over a full street address.
+        const area = results.find((r: google.maps.GeocoderResult) => r.types.some((t: string) => t === "sublocality" || t === "sublocality_level_1" || t === "locality"));
+        const text = (area ?? results[0])?.formatted_address?.split(",").slice(0, 3).join(",").trim() ?? null;
+        setAddress(text);
+        onAddress?.(text);
+      })
+      .catch(() => { if (!cancelled) onAddress?.(null); }); // Geocoding API not enabled: just show the pin
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geocoding, key]);
+  return (
+    <AdvancedMarker position={position} zIndex={60} title={address ? `Trip started at ${address}` : "Trip started here"}>
+      <div className="flex flex-col items-center">
+        <div className="max-w-[180px] truncate rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">{label}</div>
+        <div className="mt-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-600 shadow" />
+      </div>
     </AdvancedMarker>
   );
 }

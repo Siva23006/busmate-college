@@ -10,6 +10,12 @@ const BUS_SELECT = `
          t.start_time     AS active_trip_start,
          t.is_simulation  AS active_trip_is_simulation,
          t.direction      AS active_trip_direction,
+         t.start_latitude AS trip_start_latitude,
+         t.start_longitude AS trip_start_longitude,
+         r.start_location AS route_start,
+         r.destination    AS route_destination,
+         r.morning_time   AS route_morning_time,
+         r.evening_time   AS route_evening_time,
          ll.latitude, ll.longitude, ll.accuracy, ll.speed, ll.heading,
          ll.timestamp     AS location_time,
          ll.is_simulation AS location_is_simulation

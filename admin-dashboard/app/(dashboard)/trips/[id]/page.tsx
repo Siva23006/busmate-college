@@ -6,7 +6,7 @@ import { ArrowLeft, Pause, Play, Square } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { routeApi, tripApi } from "@/services/busmate";
 import { errorMessage } from "@/lib/api";
-import { clock, dateTime, directionLabel, duration, km } from "@/lib/format";
+import { clock, dateTime, duration, km, tripTitle } from "@/lib/format";
 import { BusMarker, FitBounds, MapView, Polyline, StopMarker, routeLine, stopsForDirection } from "@/components/MapView";
 import { Badge, Button, Card, DemoBadge, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
 
@@ -44,8 +44,8 @@ export default function TripDetailPage() {
   return (
     <>
       <Link href="/trips" className="text-muted mb-3 inline-flex items-center gap-1 text-sm hover:underline"><ArrowLeft className="h-4 w-4" /> Trips</Link>
-      <PageHeader title={`${trip.bus_number} · ${trip.trip_date}`} subtitle={`${trip.route_name ?? "No route"} · ${directionLabel(trip.direction)} · ${trip.driver_name ?? "Unknown driver"}`}
-        actions={<>{trip.is_simulation && <DemoBadge />}<Badge tone="amber">{directionLabel(trip.direction)}</Badge><Badge tone={trip.status === "ACTIVE" ? "green" : "blue"}>{trip.status}</Badge>
+      <PageHeader title={`${trip.bus_number} · ${trip.trip_date}`} subtitle={`${trip.route_name ?? "No route"} · ${tripTitle(trip.direction, trip.route_start, trip.route_destination)} · ${trip.driver_name ?? "Unknown driver"}`}
+        actions={<>{trip.is_simulation && <DemoBadge />}<Badge tone="amber">{tripTitle(trip.direction, trip.route_start, trip.route_destination)}</Badge><Badge tone={trip.status === "ACTIVE" ? "green" : "blue"}>{trip.status}</Badge>
           {trip.status === "ACTIVE" && <Button variant="danger" onClick={endTrip}><Square className="h-4 w-4" /> End trip</Button>}</>} />
 
       <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
@@ -70,7 +70,7 @@ export default function TripDetailPage() {
 
         <Card className="p-4">
           <dl className="space-y-2 text-sm">
-            {[["Direction", directionLabel(trip.direction)], ["Start", dateTime(trip.start_time)], ["End", dateTime(trip.end_time)], ["Duration", duration(trip.duration_seconds)],
+            {[["Direction", tripTitle(trip.direction, trip.route_start, trip.route_destination)], ["Start", dateTime(trip.start_time)], ["End", dateTime(trip.end_time)], ["Duration", duration(trip.duration_seconds)],
               ["Distance", km(trip.distance_meters)], ["Stops reached", trip.stops_reached != null ? `${trip.stops_reached} of ${trip.stops_total ?? "-"}` : "-"], ["GPS points", String(path.data?.points.length ?? "-")]].map(([k, v]) => (
               <div key={k} className="flex justify-between"><dt className="text-muted">{k}</dt><dd className="font-semibold">{v}</dd></div>
             ))}

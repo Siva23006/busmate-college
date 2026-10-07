@@ -51,11 +51,25 @@ class StopInfo {
 }
 
 class RouteInfo {
-  RouteInfo({required this.id, required this.name, this.start, this.destination, this.stops = const [], this.path});
+  RouteInfo({required this.id, required this.name, this.start, this.destination, this.stops = const [], this.path, this.morningTime, this.eveningTime});
   final int id;
   final String name;
+  /// Home area set by the admin (e.g. Redhills): morning run starts here, evening run ends here.
   final String? start;
+  /// The college set by the admin (e.g. Dr. MGR University).
   final String? destination;
+  /// "HH:MM": morning run leaves the home area / evening run leaves the college.
+  final String? morningTime;
+  final String? eveningTime;
+
+  /// Where a trip in this direction begins and ends (admin's names, stop names as a fallback).
+  String fromFor(String? direction) => direction == fromCollege
+      ? (destination ?? (stops.isNotEmpty ? stops.last.name : 'College'))
+      : (start ?? (stops.isNotEmpty ? stops.first.name : 'Start'));
+  String toFor(String? direction) => direction == fromCollege
+      ? (start ?? (stops.isNotEmpty ? stops.first.name : 'Start'))
+      : (destination ?? (stops.isNotEmpty ? stops.last.name : 'College'));
+  String? timeFor(String? direction) => direction == fromCollege ? eveningTime : morningTime;
   final List<StopInfo> stops;
   final List<List<double>>? path; // [[lat,lng], ...] optional detailed road path
 
@@ -79,6 +93,8 @@ class RouteInfo {
       path: rawPath is List
           ? rawPath.whereType<List>().map((p) => [(_double(p[0]) ?? 0), (_double(p[1]) ?? 0)]).toList()
           : null,
+      morningTime: j['morning_time'] is String && (j['morning_time'] as String).length >= 5 ? (j['morning_time'] as String).substring(0, 5) : null,
+      eveningTime: j['evening_time'] is String && (j['evening_time'] as String).length >= 5 ? (j['evening_time'] as String).substring(0, 5) : null,
     );
   }
 }

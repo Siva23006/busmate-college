@@ -44,7 +44,11 @@ const buses = {
       location: bus.latitude == null ? null : {
         latitude: bus.latitude, longitude: bus.longitude, accuracy: bus.accuracy, speed: bus.speed,
         heading: bus.heading, timestamp: bus.location_time, isSimulation: bus.location_is_simulation,
+        direction: bus.active_trip_direction,
       },
+      // Where the driver actually started this trip (first good GPS fix).
+      start: bus.active_trip_id && bus.trip_start_latitude != null
+        ? { latitude: bus.trip_start_latitude, longitude: bus.trip_start_longitude } : null,
     });
   },
   async eta(req, res) {

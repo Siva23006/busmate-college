@@ -136,6 +136,7 @@ class _BusMapViewState extends State<BusMapView> with SingleTickerProviderStateM
     final pts = _routePoints(p.route);
     final stops = p.travelStops;
     final myStop = stops.where((s) => s.id == p.myStopId).firstOrNull;
+    final start = p.hasActiveTrip && p.tripStart != null ? LatLng(p.tripStart![0], p.tripStart![1]) : null;
     final nextStopId = p.eta?.nextStop?.stopId;
 
     // First time the route is known: show it all (unless the bus is already on the map).
@@ -161,6 +162,14 @@ class _BusMapViewState extends State<BusMapView> with SingleTickerProviderStateM
             zIndexInt: mine ? 3 : (s.id == nextStopId ? 2 : 1),
           );
         }(),
+      if (start != null)
+        Marker(
+          markerId: const MarkerId('trip_start'),
+          position: start,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          zIndexInt: 4,
+          infoWindow: InfoWindow(title: 'Bus started here', snippet: p.route?.fromFor(p.direction)),
+        ),
       if (_shown != null && p.hasActiveTrip)
         Marker(
           markerId: const MarkerId('bus'),

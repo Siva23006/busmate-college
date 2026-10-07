@@ -92,8 +92,17 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     final netText = net == NetState.connected ? 'Online' : net == NetState.unstable ? 'Unstable' : 'Offline';
 
     final travelStops = route?.stopsFor(trip.direction) ?? const <StopInfo>[];
-    final from = travelStops.isNotEmpty ? travelStops.first.name : (route?.startFor(trip.direction) ?? 'Start');
-    final to = travelStops.isNotEmpty ? travelStops.last.name : (route?.destinationFor(trip.direction) ?? 'College');
+    // Place names set by the admin (e.g. Redhills -> Dr. MGR University); stop names as a fallback.
+    final from = route?.startFor(trip.direction) ?? (travelStops.isNotEmpty ? travelStops.first.name : 'Start');
+    final to = route?.destinationFor(trip.direction) ?? (travelStops.isNotEmpty ? travelStops.last.name : 'College');
+    final shown = fix ?? t.lastKnown; // last known spot keeps the map useful until the first live fix
+    final startFix = t.startFix;
+    final wait = t.secondsWithoutFix;
+    final waitingText = wait < 20
+        ? 'Searching for GPS…'
+        : wait < 60
+            ? 'Still searching GPS… keep the phone near the windscreen'
+            : 'No GPS yet. Check Location is ON and set to High accuracy';
     final nextStop = t.nextStopKnown ? (t.nextStopName ?? 'All stops reached') : (travelStops.isNotEmpty ? travelStops.first.name : '-');
     final int total = t.stopsTotal > 0 ? t.stopsTotal : travelStops.length;
     final int passed = t.stopsPassed > total ? total : t.stopsPassed;
@@ -112,12 +121,27 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                 child: TripMap(
                   route: route,
                   direction: trip.direction,
-                  position: fix == null ? null : LatLng(fix.latitude, fix.longitude),
+                  position: shown == null ? null : LatLng(shown.latitude, shown.longitude),
+                  start: startFix == null ? null : LatLng(startFix.latitude, startFix.longitude),
                   heading: heading,
                   height: double.infinity,
                   radius: 0,
+                  waitingText: waitingText,
                 ),
               ),
+              if (fix == null && shown != null)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(color: BrandColors.ink.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(16)),
+                      child: Text(waitingText, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
               // Route ribbon: FROM -> TO
               Positioned(
                 left: 12,
@@ -246,10 +270,16 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
               // Journey progress
               Row(children: [
                 Text('$passed of $total stops', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                const Spacer(),
-                if (arriveAt != null)
-                  Text('${trip.direction == fromCollege ? 'Last stop' : 'College'} ~${clockTime(arriveAt)}',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: hint)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: arriveAt == null
+                      ? const SizedBox.shrink()
+                      : Text('$to ~${clockTime(arriveAt)}',
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: hint)),
+                ),
               ]),
               const SizedBox(height: 8),
               ClipRRect(

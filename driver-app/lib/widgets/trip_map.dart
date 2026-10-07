@@ -10,8 +10,32 @@ import '../theme/app_theme.dart';
 /// Small look-only Google map for the active trip: the route line, its stops and the bus.
 /// It follows the bus; the driver never has to touch it.
 class TripMap extends StatefulWidget {
-  const TripMap({super.key, required this.route, required this.direction, this.position, this.heading, this.height = 200, this.radius = Ui.radius});
+  const TripMap({
+    super.key,
+    required this.route,
+    required this.direction,
+    this.position,
+    this.heading,
+    this.height = 200,
+    this.radius = Ui.radius,
+    this.start,
+    this.preview = false,
+    this.waitingText = 'Searching for GPS…',
+    this.badgeBottom = 12,
+  });
   final double radius;
+
+  /// Where this trip started (first GPS fix): drawn as a green START pin.
+  final LatLng? start;
+
+  /// Home-screen preview: shows the phone's own blue dot and no GPS badge.
+  final bool preview;
+
+  /// Text of the badge shown while there is no GPS fix yet (trip screen only).
+  final String waitingText;
+
+  /// Distance of that badge from the bottom of the map (so it is not hidden under panels).
+  final double badgeBottom;
   final RouteInfo? route;
   final String direction;
   final LatLng? position;
@@ -30,16 +54,18 @@ class _TripMapState extends State<TripMap> {
   BitmapDescriptor? _busIcon;
   BitmapDescriptor? _stopIcon;
   BitmapDescriptor? _endIcon;
+  BitmapDescriptor? _startIcon;
 
   @override
   void initState() {
     super.initState();
-    Future.wait([_busDot(), _dot(BrandColors.ink3, 22), _dot(BrandColors.green, 28)]).then((icons) {
+    Future.wait([_busDot(), _dot(BrandColors.ink3, 22), _dot(BrandColors.amber, 28), _startFlag()]).then((icons) {
       if (!mounted) return;
       setState(() {
         _busIcon = icons[0];
         _stopIcon = icons[1];
         _endIcon = icons[2];
+        _startIcon = icons[3];
       });
     }).catchError((_) {});
   }
@@ -89,10 +115,19 @@ class _TripMapState extends State<TripMap> {
           Marker(
             markerId: MarkerId('stop_${stops[i].id}'),
             position: LatLng(stops[i].latitude, stops[i].longitude),
-            icon: i == stops.length - 1 ? _endIcon! : _stopIcon!, // green = last stop of this trip
+            icon: i == stops.length - 1 ? _endIcon! : _stopIcon!, // amber = where this trip ends
             anchor: const Offset(0.5, 0.5),
             zIndexInt: i == stops.length - 1 ? 2 : 1,
           ),
+      if (widget.start != null)
+        Marker(
+          markerId: const MarkerId('start'),
+          position: widget.start!,
+          icon: _startIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          anchor: _startIcon != null ? const Offset(0.5, 0.5) : const Offset(0.5, 1),
+          zIndexInt: 5,
+          infoWindow: const InfoWindow(title: 'Trip started here'),
+        ),
       if (p != null)
         Marker(
           markerId: const MarkerId('bus'),
@@ -119,6 +154,8 @@ class _TripMapState extends State<TripMap> {
                 if (line.length >= 2) Polyline(polylineId: const PolylineId('route'), points: line, color: BrandColors.amber, width: 6),
               },
               onMapCreated: _onCreated,
+              // The phone's own blue dot: visible even before the first GPS point reaches the server.
+              myLocationEnabled: widget.preview || p == null,
               scrollGesturesEnabled: false,
               zoomGesturesEnabled: false,
               rotateGesturesEnabled: false,
@@ -129,14 +166,21 @@ class _TripMapState extends State<TripMap> {
               compassEnabled: false,
             ),
           ),
-          if (p == null)
+          if (p == null && !widget.preview)
             Positioned(
               left: 12,
-              top: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(color: BrandColors.ink.withValues(alpha: 0.85), borderRadius: BorderRadius.circular(14)),
-                child: const Text('Waiting for GPS…', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+              right: 12,
+              bottom: widget.badgeBottom,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(color: BrandColors.ink.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(16)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2.5, color: BrandColors.amber)),
+                    const SizedBox(width: 10),
+                    Flexible(child: Text(widget.waitingText, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
+                  ]),
+                ),
               ),
             ),
         ]),
@@ -159,6 +203,23 @@ Future<BitmapDescriptor> _dot(Color color, double width, {double size = 64}) {
   canvas.drawCircle(c, size * 0.46, Paint()..color = Colors.white);
   canvas.drawCircle(c, size * 0.32, Paint()..color = color);
   return _finish(recorder, size, width);
+}
+
+/// START pin: green circle with a white flag-like square.
+Future<BitmapDescriptor> _startFlag({double size = 88}) {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  final c = Offset(size / 2, size / 2);
+  canvas.drawCircle(c, size * 0.46, Paint()..color = Colors.white);
+  canvas.drawCircle(c, size * 0.36, Paint()..color = BrandColors.green);
+  final flag = Path()
+    ..moveTo(c.dx - size * 0.10, c.dy - size * 0.20)
+    ..lineTo(c.dx + size * 0.18, c.dy - size * 0.10)
+    ..lineTo(c.dx - size * 0.10, c.dy)
+    ..close();
+  canvas.drawPath(flag, Paint()..color = Colors.white);
+  canvas.drawRect(Rect.fromLTWH(c.dx - size * 0.13, c.dy - size * 0.22, size * 0.04, size * 0.42), Paint()..color = Colors.white);
+  return _finish(recorder, size, 36);
 }
 
 /// Bus marker: ink circle with an amber arrow pointing up (the marker is rotated to the heading).

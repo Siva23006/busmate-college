@@ -84,9 +84,9 @@ async function processLocation(user, payload) {
 
   state.lastTimestamp = timestamp.getTime();
   await locationModel.upsertLive(loc);
-  if (!state.startSaved) {
+  if (!state.start) {
     // First reliable fix of the trip = where the driver started.
-    state.startSaved = true;
+    state.start = { latitude: loc.latitude, longitude: loc.longitude };
     db.query(
       'UPDATE trips SET start_latitude = $2, start_longitude = $3 WHERE id = $1 AND start_latitude IS NULL',
       [trip.id, loc.latitude, loc.longitude],
@@ -195,6 +195,7 @@ async function processLocation(user, payload) {
     timestamp: timestamp.toISOString(),
     isSimulation: trip.is_simulation, // clients must show "DEMO / SIMULATION" when true
     atStopId: state.insideStopId ? Number(state.insideStopId) : null,
+    start: state.start, // where this trip started: shown as the START pin on every map
     eta,
   };
   realtime.toBusAndAdmins(trip.bus_id, 'bus:location', message);

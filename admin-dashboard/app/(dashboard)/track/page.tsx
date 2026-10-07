@@ -4,7 +4,6 @@
 // and stop-by-stop arrivals (scheduled vs actual). Data comes from GET /api/buses/:id/track.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AdvancedMarker } from "@vis.gl/react-google-maps";
 import {
   ArrowRight, CalendarDays, Clock3, Crosshair, Flag, Gauge, MapPin, Navigation, PlayCircle, Radio,
   Route as RouteIcon, Search, Timer, UserRound, X,
@@ -12,10 +11,10 @@ import {
 import { useLiveBuses, type LiveBus } from "@/hooks/useLiveBuses";
 import { busApi } from "@/services/busmate";
 import { errorMessage } from "@/lib/api";
-import { clock, directionLabel, duration, etaMinutes, km, timeAgo } from "@/lib/format";
+import { clock, duration, etaMinutes, km, timeAgo, timeOfDay, tripEnds } from "@/lib/format";
 import type { TrackData, TrackTrip } from "@/types";
 import {
-  BusMarker, FitBounds, MapView, PanTo, Polyline, StopMarker, routeLine, stopsForDirection, type LatLng,
+  BusMarker, FitBounds, MapView, PanTo, Polyline, StartMarker, StopMarker, routeLine, stopsForDirection, type LatLng,
 } from "@/components/MapView";
 import { movementLabel } from "@/components/LiveFleet";
 import { Badge, Card, DemoBadge, EmptyState, ErrorBox, Input, PageHeader, Skeleton, cn, type Tone } from "@/components/ui";
@@ -33,12 +32,13 @@ function delayBadge(min: number | null) {
   return min > 0 ? <Badge tone={min > 10 ? "red" : "amber"}>{min} min late</Badge> : <Badge tone="blue">{-min} min early</Badge>;
 }
 
+/** Place names set by the admin on the route: morning home -> college, evening college -> home. */
 function routeEnds(trip: { direction: string }, data: TrackData | null): [string, string] {
-  const stops = stopsForDirection(data?.route?.stops, trip.direction);
-  const first = stops[0]?.stop_name ?? (trip.direction === "FROM_COLLEGE" ? "College" : data?.route?.start_location ?? "Start");
-  const last = stops[stops.length - 1]?.stop_name ?? (trip.direction === "FROM_COLLEGE" ? data?.route?.start_location ?? "End" : "College");
-  return [first, last];
+  const { from, to } = tripEnds(trip.direction, data?.route?.start_location, data?.route?.destination);
+  return [from, to];
 }
+
+const shiftName = (direction: string) => (direction === "FROM_COLLEGE" ? "Evening" : "Morning");
 
 export default function TrackBusPage() {
   const { buses, connection } = useLiveBuses();
@@ -49,6 +49,7 @@ export default function TrackBusPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openTripId, setOpenTripId] = useState<number | null>(null);
+  const [startAddress, setStartAddress] = useState<string | null>(null);
 
   // Deep link: /track?bus=12
   useEffect(() => {
@@ -110,7 +111,12 @@ export default function TrackBusPage() {
   }, [data?.route, direction, live?.active_trip_id]);
   const busPos: LatLng | null = live?.latitude != null && live.longitude != null && live.active_trip_id
     ? { lat: live.latitude, lng: live.longitude } : null;
-  const startPos: LatLng | null = activeTrip?.start ? { lat: activeTrip.start.latitude, lng: activeTrip.start.longitude } : null;
+  // Where the driver started: from the live socket message first (instant), else from the day log.
+  const startSrc = live?.live?.start
+    ?? (live?.trip_start_latitude != null ? { latitude: live.trip_start_latitude, longitude: live.trip_start_longitude! } : null)
+    ?? activeTrip?.start ?? null;
+  const startPos: LatLng | null = startSrc ? { lat: startSrc.latitude, lng: startSrc.longitude } : null;
+  useEffect(() => { setStartAddress(null); }, [live?.active_trip_id]);
   const eta = live?.eta ?? data?.eta ?? null;
   const isToday = date === localToday();
 
@@ -168,12 +174,7 @@ export default function TrackBusPage() {
                   <StopMarker key={s.id} stop={s} highlight={eta?.nextStop?.stopId === s.id} />
                 ))}
                 {startPos && live?.active_trip_id && (
-                  <AdvancedMarker position={startPos} zIndex={50} title="Trip started here">
-                    <div className="flex flex-col items-center">
-                      <div className="rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">START {clock(activeTrip?.startTime)}</div>
-                      <div className="mt-0.5 h-3 w-3 rounded-full border-2 border-white bg-green-600 shadow" />
-                    </div>
-                  </AdvancedMarker>
+                  <StartMarker position={startPos} label={`START ${clock(activeTrip?.startTime ?? live.active_trip_start)}`} onAddress={setStartAddress} />
                 )}
                 {busPos && live && (
                   <BusMarker position={busPos} label={live.bus_number} heading={live.heading} freshness={live.freshness} selected demo={!!live.active_trip_is_simulation} />
@@ -182,7 +183,7 @@ export default function TrackBusPage() {
               {data && (
                 <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                   <span className="surface rounded-xl px-3 py-1.5 text-xs font-bold shadow">{data.bus.bus_number} · {data.route?.route_name ?? "No route"}</span>
-                  {live?.active_trip_id ? <Badge tone={DIR_TONE[direction]}>{directionLabel(direction)}</Badge> : <Badge>Not running</Badge>}
+                  {live?.active_trip_id ? <Badge tone={DIR_TONE[direction]}>{shiftName(direction)} · {routeEnds({ direction }, data).join(" → ")}</Badge> : <Badge>Not running</Badge>}
                   {live?.active_trip_is_simulation && <DemoBadge />}
                 </div>
               )}
@@ -191,7 +192,7 @@ export default function TrackBusPage() {
             {/* Live panel */}
             <Card className="flex h-[560px] flex-col overflow-hidden">
               {!data && loading ? <div className="space-y-3 p-5"><Skeleton className="h-8 w-40" /><Skeleton className="h-24" /><Skeleton className="h-40" /></div> : data && (
-                <LivePanel data={data} live={live} direction={direction} />
+                <LivePanel data={data} live={live} direction={direction} startAddress={startAddress} hasStart={!!startPos} />
               )}
             </Card>
           </div>
@@ -267,7 +268,7 @@ function Row({ icon: Icon, label, children }: { icon: typeof Clock3; label: stri
   );
 }
 
-function LivePanel({ data, live, direction }: { data: TrackData; live: LiveBus | null; direction: string }) {
+function LivePanel({ data, live, direction, startAddress, hasStart }: { data: TrackData; live: LiveBus | null; direction: string; startAddress: string | null; hasStart: boolean }) {
   const trip = data.activeTrip;
   const eta = live?.eta ?? data.eta;
   const [from, to] = routeEnds({ direction }, data);
@@ -285,9 +286,11 @@ function LivePanel({ data, live, direction }: { data: TrackData; live: LiveBus |
         <div className="mt-4">
           <Row icon={UserRound} label="Driver">{data.bus.driver_name ?? "-"}</Row>
           <Row icon={RouteIcon} label="Route">{data.route?.route_name ?? "-"}</Row>
+          <Row icon={PlayCircle} label="Morning run">{timeOfDay(data.route?.morning_time)} · {routeEnds({ direction: "TO_COLLEGE" }, data).join(" → ")}</Row>
+          <Row icon={PlayCircle} label="Evening run">{timeOfDay(data.route?.evening_time)} · {routeEnds({ direction: "FROM_COLLEGE" }, data).join(" → ")}</Row>
           <Row icon={MapPin} label="Last seen">{data.live?.label ?? (data.live ? `${data.live.latitude.toFixed(4)}, ${data.live.longitude.toFixed(4)}` : "-")}</Row>
           <Row icon={Radio} label="Last update">{timeAgo(data.live?.timestamp)}</Row>
-          {last && <Row icon={Flag} label="Last trip">{directionLabel(last.direction)} · {clock(last.startTime)}–{clock(last.endTime)}</Row>}
+          {last && <Row icon={Flag} label="Last trip">{shiftName(last.direction)} · {clock(last.startTime)}–{clock(last.endTime)}</Row>}
         </div>
         <p className="text-muted mt-auto text-xs">This panel goes live as soon as the driver presses START TRIP.</p>
       </div>
@@ -321,12 +324,12 @@ function LivePanel({ data, live, direction }: { data: TrackData; live: LiveBus |
           </div>
         )}
         {eta?.destination && (
-          <Row icon={Flag} label={direction === "FROM_COLLEGE" ? "Last stop ETA" : "College ETA"}>{clock(eta.destination.expectedAt)} ({etaMinutes(eta.destination.etaSeconds)})</Row>
+          <Row icon={Flag} label={`ETA ${to}`}>{clock(eta.destination.expectedAt)} ({etaMinutes(eta.destination.etaSeconds)})</Row>
         )}
         <Row icon={PlayCircle} label="Started at">{clock(trip?.startTime)}</Row>
-        <Row icon={Crosshair} label="Started from">{trip?.start ? (trip.start.label ?? `${trip.start.latitude.toFixed(4)}, ${trip.start.longitude.toFixed(4)}`) : "Waiting for GPS"}</Row>
+        <Row icon={Crosshair} label="Started from">{startAddress ?? trip?.start?.label ?? (trip?.start ? `${trip.start.latitude.toFixed(4)}, ${trip.start.longitude.toFixed(4)}` : hasStart ? "On the map (green pin)" : "Waiting for first GPS fix")}</Row>
         <Row icon={UserRound} label="Driver">{trip?.driverName ?? data.bus.driver_name ?? "-"}</Row>
-        <Row icon={Navigation} label="Direction">{directionLabel(direction)}</Row>
+        <Row icon={Navigation} label="Run">{shiftName(direction)} · {from} → {to}</Row>
         <Row icon={Gauge} label="GPS accuracy">{live.accuracy != null ? `±${Math.round(live.accuracy)} m` : "-"}</Row>
         <Row icon={Radio} label="Last update">{timeAgo(live.location_time)}</Row>
 
@@ -361,7 +364,7 @@ function TripRow({ trip, index, data, open, onToggle }: { trip: TrackTrip; index
         <span className="grid h-8 w-8 place-items-center rounded-full bg-ink-900 text-sm font-bold text-white dark:bg-amber-brand dark:text-ink-950">{index}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 font-semibold">
-            <Badge tone={DIR_TONE[trip.direction]}>{trip.direction === "FROM_COLLEGE" ? "Return" : "Morning"} · {directionLabel(trip.direction)}</Badge>
+            <Badge tone={DIR_TONE[trip.direction]}>{shiftName(trip.direction)}</Badge>
             <span className="truncate">{from} → {to}</span>
             {trip.status === "ACTIVE" && <Badge tone="green" dot>Live</Badge>}
             {trip.isSimulation && <DemoBadge />}

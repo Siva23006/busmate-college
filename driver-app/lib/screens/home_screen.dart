@@ -183,7 +183,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             if (bus.route != null) ...[
               const SizedBox(height: Ui.pad),
               const SectionLabel('Route to follow'),
-              TripMap(key: ValueKey('preview-${bus.id}-$_direction'), route: bus.route, direction: _direction, height: 190),
+              TripMap(
+                key: ValueKey('preview-${bus.id}-$_direction'),
+                route: bus.route,
+                direction: _direction,
+                height: 210,
+                preview: true, // shows the driver's own blue dot, no "waiting for GPS" badge
+              ),
               const SizedBox(height: 8),
               _StopStrip(stops: bus.route!.stopsFor(_direction)),
             ],
@@ -236,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   : bus.status == 'MAINTENANCE'
                       ? 'This bus is marked as under maintenance.'
                       : allReady
-                          ? '${directionShift(_direction)} run · ${directionLabel(_direction)}'
+                          ? '${directionShift(_direction)} run · ${bus.route!.startFor(_direction) ?? 'Start'} → ${bus.route!.destinationFor(_direction) ?? 'College'}'
                           : 'Fix the items above. You will be asked again when you start.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: hint),
@@ -300,13 +306,13 @@ class _HeroCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             '${route.name} · ${route.stops.length} stops'
-            '${direction == toCollege && route.scheduledStart != null ? ' · starts ${route.scheduledStart}' : ''}',
+            '${route.timeFor(direction) != null ? ' · leaves ${clock12(route.timeFor(direction))}' : ''}',
             style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 20),
           const Text('WHICH TRIP?', style: TextStyle(color: Colors.white60, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
           const SizedBox(height: 10),
-          DirectionSelector(value: direction, onChanged: onDirection),
+          DirectionSelector(value: direction, onChanged: onDirection, route: route),
         ],
       ]),
     );

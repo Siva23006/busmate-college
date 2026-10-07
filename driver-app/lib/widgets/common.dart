@@ -151,33 +151,40 @@ class DirectionChip extends StatelessWidget {
 
 /// Two large buttons to choose the run: morning to the college, or evening back.
 class DirectionSelector extends StatelessWidget {
-  const DirectionSelector({super.key, required this.value, required this.onChanged});
+  const DirectionSelector({super.key, required this.value, required this.onChanged, this.route});
   final String value;
   final ValueChanged<String> onChanged;
+
+  /// When given, the buttons show the real place names and times set by the admin.
+  final RouteInfo? route;
 
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Expanded(child: _DirectionButton(direction: toCollege, selected: value == toCollege, onTap: () => onChanged(toCollege))),
+      Expanded(child: _DirectionButton(direction: toCollege, route: route, selected: value == toCollege, onTap: () => onChanged(toCollege))),
       const SizedBox(width: 12),
-      Expanded(child: _DirectionButton(direction: fromCollege, selected: value == fromCollege, onTap: () => onChanged(fromCollege))),
+      Expanded(child: _DirectionButton(direction: fromCollege, route: route, selected: value == fromCollege, onTap: () => onChanged(fromCollege))),
     ]);
   }
 }
 
 class _DirectionButton extends StatelessWidget {
-  const _DirectionButton({required this.direction, required this.selected, required this.onTap});
+  const _DirectionButton({required this.direction, required this.selected, required this.onTap, this.route});
   final String direction;
   final bool selected;
   final VoidCallback onTap;
+  final RouteInfo? route;
 
   @override
   Widget build(BuildContext context) {
     final fg = selected ? BrandColors.ink : Colors.white;
+    final r = route;
+    final places = r == null ? directionLabel(direction) : '${r.startFor(direction) ?? 'Start'} → ${r.destinationFor(direction) ?? 'College'}';
+    final time = r?.timeFor(direction);
     return Semantics(
       button: true,
       selected: selected,
-      label: '${directionShift(direction)}, ${directionLabel(direction)}',
+      label: '${directionShift(direction)}, $places',
       excludeSemantics: true,
       child: GestureDetector(
         onTap: () {
@@ -206,10 +213,15 @@ class _DirectionButton extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(directionLabel(direction), style: TextStyle(color: fg, fontSize: 17, fontWeight: FontWeight.w700)),
-            ),
+            Text(places,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: fg, fontSize: 15, fontWeight: FontWeight.w800, height: 1.2)),
+            if (time != null) ...[
+              const SizedBox(height: 2),
+              Text(clock12(time), style: TextStyle(color: fg.withValues(alpha: 0.8), fontSize: 14, fontWeight: FontWeight.w700)),
+            ],
           ]),
         ),
       ),

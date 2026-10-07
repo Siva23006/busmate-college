@@ -24,7 +24,7 @@ async function listStops(routeId) {
   return rows;
 }
 
-const ROUTE_FIELDS = ['route_name', 'description', 'start_location', 'destination', 'path', 'active'];
+const ROUTE_FIELDS = ['route_name', 'description', 'start_location', 'destination', 'path', 'active', 'morning_time', 'evening_time'];
 const prep = (c, v) => (c === 'path' && v != null ? JSON.stringify(v) : v);
 
 async function create(data) {

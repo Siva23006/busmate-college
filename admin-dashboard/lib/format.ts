@@ -42,6 +42,32 @@ export function directionLabel(direction: string | null | undefined): string {
   return direction === "FROM_COLLEGE" ? "From College" : "To College";
 }
 
+/**
+ * Real place names for a trip. The admin sets each route's home area (start_location, e.g. Redhills)
+ * and college (destination). Morning: home -> college. Evening: college -> home.
+ */
+export function tripEnds(direction: string | null | undefined, home?: string | null, college?: string | null) {
+  const h = home?.trim() || "Home area";
+  const c = college?.trim() || "College";
+  return direction === "FROM_COLLEGE" ? { from: c, to: h } : { from: h, to: c };
+}
+
+/** "Morning · Redhills → Dr. MGR University" */
+export function tripTitle(direction: string | null | undefined, home?: string | null, college?: string | null): string {
+  const { from, to } = tripEnds(direction, home, college);
+  return `${direction === "FROM_COLLEGE" ? "Evening" : "Morning"} · ${from} → ${to}`;
+}
+
+/** "07:30:00" -> "7:30 AM" */
+export function timeOfDay(t: string | null | undefined): string {
+  if (!t) return "-";
+  const [hh, mm] = t.split(":").map(Number);
+  if (Number.isNaN(hh)) return t;
+  const am = hh < 12;
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:${String(mm ?? 0).padStart(2, "0")} ${am ? "AM" : "PM"}`;
+}
+
 export function etaMinutes(seconds: number | null | undefined): string {
   if (seconds == null) return "-";
   const m = Math.round(seconds / 60);

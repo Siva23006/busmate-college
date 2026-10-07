@@ -6,9 +6,9 @@ import type { LiveBus } from "@/hooks/useLiveBuses";
 import type { Connection } from "@/hooks/useLiveBuses";
 import { routeApi } from "@/services/busmate";
 import type { Route } from "@/types";
-import { BusMarker, FitBounds, MapView, PanTo, Polyline, StopMarker, routeLine, stopsForDirection, type LatLng } from "./MapView";
+import { BusMarker, FitBounds, MapView, PanTo, Polyline, StartMarker, StopMarker, routeLine, stopsForDirection, type LatLng } from "./MapView";
 import { Badge, Card, DemoBadge, EmptyState, Skeleton, cn, type Tone } from "./ui";
-import { clock, directionLabel, etaMinutes, km, timeAgo } from "@/lib/format";
+import { clock, etaMinutes, km, timeAgo, tripEnds, tripTitle } from "@/lib/format";
 
 const FRESH: Record<LiveBus["freshness"], { tone: Tone; label: string }> = {
   LIVE: { tone: "green", label: "Online" },
@@ -28,6 +28,18 @@ export function movementLabel(b: LiveBus): { tone: Tone; text: string } {
 /** Direction of the bus's running trip, or null when it is not on a trip. */
 export function tripDirection(b: LiveBus) {
   return b.active_trip_id ? (b.live?.direction ?? b.active_trip_direction ?? "TO_COLLEGE") : null;
+}
+
+/** "Morning · Redhills → Dr. MGR University" for a running bus. */
+export function runTitle(b: LiveBus): string {
+  return tripTitle(tripDirection(b), b.route_start, b.route_destination);
+}
+
+/** Where the selected bus started its trip (live message first, then the REST snapshot). */
+export function tripStart(b: LiveBus | null): LatLng | null {
+  if (!b?.active_trip_id) return null;
+  const s = b.live?.start ?? (b.trip_start_latitude != null ? { latitude: b.trip_start_latitude, longitude: b.trip_start_longitude! } : null);
+  return s ? { lat: s.latitude, lng: s.longitude } : null;
 }
 
 export function ConnectionPill({ connection }: { connection: Connection }) {
@@ -57,6 +69,9 @@ export function LiveFleet({ buses, loading, mapHeight = "h-[520px]" }: { buses: 
   // Stop numbers follow the running trip: reversed for an evening (FROM_COLLEGE) run.
   const direction = selected ? tripDirection(selected) : null;
   const mapStops = useMemo(() => stopsForDirection(route?.stops, direction), [route, direction]);
+  const startPos = tripStart(selected);
+  const [startAddress, setStartAddress] = useState<string | null>(null);
+  useEffect(() => { setStartAddress(null); }, [selected?.id, selected?.active_trip_id]);
   const focus = selected && selected.latitude != null ? { lat: selected.latitude, lng: selected.longitude! } : null;
   const sorted = [...buses].sort((a, b) => Number(!!b.active_trip_id) - Number(!!a.active_trip_id) || a.bus_number.localeCompare(b.bus_number));
 
@@ -67,6 +82,7 @@ export function LiveFleet({ buses, loading, mapHeight = "h-[520px]" }: { buses: 
           {!selected && <FitBounds points={fitPoints} />}
           <PanTo target={focus} zoom={15} />
           {route && <Polyline path={line} color="#F5B301" weight={5} />}
+          {startPos && <StartMarker position={startPos} label={`START ${clock(selected?.active_trip_start)}`} onAddress={setStartAddress} />}
           {route && mapStops.map((s) => <StopMarker key={s.id} stop={s} highlight={selected?.eta?.nextStop?.stopId === s.id} />)}
           {positioned.map((b) => (
             <BusMarker key={b.id} position={{ lat: b.latitude!, lng: b.longitude! }} label={b.bus_number}
@@ -82,7 +98,7 @@ export function LiveFleet({ buses, loading, mapHeight = "h-[520px]" }: { buses: 
       </Card>
 
       <Card className={cn("flex flex-col overflow-hidden", mapHeight)}>
-        {selected ? <BusDetail bus={selected} route={route} onBack={() => setSelectedId(null)} /> : (
+        {selected ? <BusDetail bus={selected} route={route} startAddress={startAddress} hasStart={!!startPos} onBack={() => setSelectedId(null)} /> : (
           <>
             <div className="border-app flex items-center justify-between border-b px-4 py-3">
               <h3 className="font-bold">Buses</h3>
@@ -99,7 +115,7 @@ export function LiveFleet({ buses, loading, mapHeight = "h-[520px]" }: { buses: 
                       b.freshness === "DELAYED" && "bg-delayed", b.freshness === "OFFLINE" && "bg-offline", b.freshness === "IDLE" && "bg-slate-400")} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 font-semibold">{b.bus_number}{b.active_trip_is_simulation && <DemoBadge />}</div>
-                      <div className="text-muted truncate text-xs">{b.route_name ?? "No route"}{b.active_trip_id ? ` · ${directionLabel(tripDirection(b))}` : ""} · {b.driver_name ?? "No driver"}</div>
+                      <div className="text-muted truncate text-xs">{b.active_trip_id ? runTitle(b) : (b.route_name ?? "No route")} · {b.driver_name ?? "No driver"}</div>
                     </div>
                     <div className="text-right">
                       <Badge tone={m.tone}>{m.text}</Badge>
@@ -126,7 +142,8 @@ function Row({ icon: Icon, label, children }: { icon: typeof Gauge; label: strin
   );
 }
 
-function BusDetail({ bus, route, onBack }: { bus: LiveBus; route: Route | null; onBack: () => void }) {
+function BusDetail({ bus, route, startAddress, hasStart, onBack }: { bus: LiveBus; route: Route | null; startAddress: string | null; hasStart: boolean; onBack: () => void }) {
+  const ends = tripEnds(tripDirection(bus), bus.route_start, bus.route_destination);
   const m = movementLabel(bus);
   const f = FRESH[bus.freshness];
   const eta = bus.eta;
@@ -140,18 +157,19 @@ function BusDetail({ bus, route, onBack }: { bus: LiveBus; route: Route | null; 
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <Badge tone={m.tone}>{m.text}</Badge>
-          {bus.active_trip_id && <Badge tone="blue">{directionLabel(tripDirection(bus))}</Badge>}
+          {bus.active_trip_id && <Badge tone="blue">{runTitle(bus)}</Badge>}
           {bus.active_trip_is_simulation && <DemoBadge />}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-2">
         <Row icon={UserRound} label="Driver">{bus.driver_name ?? "-"}</Row>
         <Row icon={RouteIcon} label="Route">{bus.route_name ?? "-"}</Row>
-        <Row icon={ArrowLeftRight} label="Direction">{bus.active_trip_id ? directionLabel(tripDirection(bus)) : "-"}</Row>
+        <Row icon={ArrowLeftRight} label="Run">{bus.active_trip_id ? `${ends.from} → ${ends.to}` : "-"}</Row>
         <Row icon={Gauge} label="Speed">{bus.speed != null ? `${Math.round(bus.speed * 3.6)} km/h` : "-"}</Row>
         <Row icon={Crosshair} label="GPS accuracy">{bus.accuracy != null ? `±${Math.round(bus.accuracy)} m` : "-"}{bus.live?.accuracyLevel ? ` · ${bus.live.accuracyLevel}` : ""}</Row>
         <Row icon={Radio} label="Last update">{timeAgo(bus.location_time)}</Row>
         <Row icon={Clock} label="Trip started">{clock(bus.active_trip_start)}</Row>
+        {bus.active_trip_id && <Row icon={Crosshair} label="Started from">{startAddress ?? (hasStart ? "Green START pin" : "Waiting for GPS")}</Row>}
         {eta?.nextStop && (
           <div className="mt-3 rounded-2xl bg-amber-soft p-4 text-ink-900">
             <div className="text-xs font-bold uppercase tracking-wide">Estimated arrival · next stop</div>

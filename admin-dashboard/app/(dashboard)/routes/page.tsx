@@ -56,8 +56,8 @@ export default function RoutesPage() {
         {error && <ErrorBox message={error} />}
         <Field label="Route name"><Input value={form.route_name} onChange={set("route_name")} placeholder="Route A" /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Start location"><Input value={form.start_location} onChange={set("start_location")} /></Field>
-          <Field label="Destination"><Input value={form.destination} onChange={set("destination")} placeholder="College" /></Field>
+          <Field label="Home area" hint="Morning start / evening end"><Input value={form.start_location} onChange={set("start_location")} placeholder="Redhills" /></Field>
+          <Field label="College" hint="Morning end / evening start"><Input value={form.destination} onChange={set("destination")} placeholder="Dr. MGR University" /></Field>
         </div>
         <Field label="Description"><Input value={form.description} onChange={set("description")} /></Field>
       </Modal>

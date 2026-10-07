@@ -29,6 +29,8 @@ async function load(tripId) {
     students: [],
     studentsLoadedAt: 0,
     offline: false,
+    // Where the driver started (first reliable GPS fix), kept after a server restart.
+    start: trip.start_latitude != null ? { latitude: trip.start_latitude, longitude: trip.start_longitude } : null,
   };
   states.set(key, state);
   return state;

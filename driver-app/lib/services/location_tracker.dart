@@ -37,6 +37,15 @@ class LocationTracker extends ChangeNotifier {
 
   Position? lastFix;
   DateTime? lastFixAt;
+
+  /// First GPS fix of this trip: where the driver started (green START pin).
+  Position? startFix;
+
+  /// Phone's last known position, shown on the map until the first live fix arrives (never sent).
+  Position? lastKnown;
+
+  /// When tracking started, to show helpful hints if GPS takes long.
+  DateTime? startedAt;
   DateTime? lastSentAt;
   DateTime? lastAckAt;
   int sentCount = 0;
@@ -102,6 +111,9 @@ class LocationTracker extends ChangeNotifier {
     await stop();
     _busId = busId;
     _tripId = tripId;
+    startedAt = DateTime.now();
+    startFix = null;
+    lastKnown = null;
     sentCount = 0;
     mockDetected = false;
     nextStopName = null;
@@ -148,7 +160,31 @@ class LocationTracker extends ChangeNotifier {
     // Refresh status labels (GPS stale, network unstable) even with no new events.
     _ticker = Timer.periodic(const Duration(seconds: 3), (_) => notifyListeners());
     notifyListeners();
+    _warmUpGps();
   }
+
+  /// Gets a position quickly: the last known one for the map (display only), then one fresh fix,
+  /// so the bus appears in seconds instead of waiting for the first stream event.
+  Future<void> _warmUpGps() async {
+    try {
+      final known = await Geolocator.getLastKnownPosition();
+      if (known != null && lastFix == null && isRunning) {
+        lastKnown = known;
+        notifyListeners();
+      }
+    } catch (_) {}
+    try {
+      final fresh = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
+      );
+      if (lastFix == null && isRunning) _onPosition(fresh);
+    } catch (_) {
+      // No fix yet (indoors / weak signal). The position stream keeps trying.
+    }
+  }
+
+  /// Seconds since tracking started without any GPS fix (0 once a fix arrived).
+  int get secondsWithoutFix => lastFix != null || startedAt == null ? 0 : DateTime.now().difference(startedAt!).inSeconds;
 
   void _connectSocket(String token) {
     final socket = io.io(
@@ -189,6 +225,7 @@ class LocationTracker extends ChangeNotifier {
     mockDetected = false;
     lastFix = p;
     lastFixAt = DateTime.now();
+    startFix ??= p;
     final payload = <String, dynamic>{
       'busId': _busId,
       'tripId': _tripId,

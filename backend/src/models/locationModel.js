@@ -21,7 +21,10 @@ async function insertHistory(loc, isReliable) {
 }
 
 async function getLive(busId) {
-  const { rows } = await db.query('SELECT * FROM live_locations WHERE bus_id = $1', [busId]);
+  const { rows } = await db.query(
+    `SELECT ll.*, t.direction, t.start_latitude, t.start_longitude
+       FROM live_locations ll LEFT JOIN trips t ON t.id = ll.trip_id
+      WHERE ll.bus_id = $1`, [busId]);
   return rows[0] || null;
 }
 

@@ -66,7 +66,12 @@ class _StartTripScreenState extends State<StartTripScreen> {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('${directionShift(direction)} TRIP',
                           style: const TextStyle(color: BrandColors.ink, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                      Text(directionLabel(direction), style: const TextStyle(color: BrandColors.ink, fontSize: 32, fontWeight: FontWeight.w900, height: 1.15)),
+                      Text(
+                        route == null
+                            ? directionLabel(direction)
+                            : '${route.startFor(direction) ?? 'Start'} → ${route.destinationFor(direction) ?? 'College'}',
+                        style: const TextStyle(color: BrandColors.ink, fontSize: 26, fontWeight: FontWeight.w900, height: 1.15),
+                      ),
                     ]),
                   ),
                 ]),
@@ -85,9 +90,9 @@ class _StartTripScreenState extends State<StartTripScreen> {
                     SummaryRow(icon: Icons.flag_rounded, label: 'To', value: route?.destinationFor(direction) ?? '-'),
                     const Divider(),
                     SummaryRow(icon: Icons.pin_drop_rounded, label: 'Stops', value: '${route?.stops.length ?? 0}'),
-                    if (direction == toCollege && route?.scheduledStart != null) ...[
+                    if (route?.timeFor(direction) != null) ...[
                       const Divider(),
-                      SummaryRow(icon: Icons.schedule_rounded, label: 'Scheduled start', value: route!.scheduledStart!),
+                      SummaryRow(icon: Icons.schedule_rounded, label: 'Scheduled start', value: clock12(route!.timeFor(direction))),
                     ],
                   ]),
                 ),

@@ -52,11 +52,16 @@ class StopInfo {
 }
 
 class RouteInfo {
-  RouteInfo({required this.id, required this.name, this.start, this.destination, this.stops = const [], this.path});
+  RouteInfo({required this.id, required this.name, this.start, this.destination, this.stops = const [], this.path, this.morningTime, this.eveningTime});
   final int id;
   final String name;
+  /// Home area set by the admin (e.g. Redhills): the morning run starts here.
   final String? start;
+  /// The college set by the admin (e.g. Dr. MGR University): the evening run starts here.
   final String? destination;
+  /// Departure times set by the admin, "HH:MM" (morning from the home area, evening from the college).
+  final String? morningTime;
+  final String? eveningTime;
   final List<StopInfo> stops; // stored order: towards the college
   final List<List<double>>? path; // [[lat,lng], ...] road line, if the backend generated one
 
@@ -80,11 +85,18 @@ class RouteInfo {
       path: rawPath is List
           ? rawPath.whereType<List>().where((p) => p.length >= 2).map((p) => [(_double(p[0]) ?? 0), (_double(p[1]) ?? 0)]).toList()
           : null,
+      morningTime: _hhmm(j['morning_time']),
+      eveningTime: _hhmm(j['evening_time']),
     );
   }
 
+  /// Morning: the admin's morning time (or the first stop's time). Evening: the admin's evening time.
+  String? timeFor(String? direction) => direction == fromCollege
+      ? eveningTime
+      : (morningTime ?? (stops.isNotEmpty ? _hhmm(stops.first.scheduledTime) : null));
+
   /// First stop's scheduled time, used as "scheduled start".
-  String? get scheduledStart => stops.isNotEmpty ? stops.first.scheduledTime?.substring(0, 5) : null;
+  String? get scheduledStart => timeFor(toCollege);
 }
 
 class BusInfo {
@@ -157,4 +169,20 @@ class DriverHome {
       activeTrip: j['activeTrip'] is Map<String, dynamic> ? Trip.fromJson(j['activeTrip'] as Map<String, dynamic>) : null,
     );
   }
+}
+
+/// "07:30:00" -> "07:30" (null-safe).
+String? _hhmm(Object? v) {
+  if (v is! String || v.length < 5) return null;
+  return v.substring(0, 5);
+}
+
+/// "07:30" -> "7:30 AM".
+String clock12(String? hhmm) {
+  if (hhmm == null) return '-';
+  final parts = hhmm.split(':');
+  final h = int.tryParse(parts[0]);
+  if (h == null || parts.length < 2) return hhmm;
+  final h12 = h % 12 == 0 ? 12 : h % 12;
+  return '$h12:${parts[1]} ${h < 12 ? 'AM' : 'PM'}';
 }
