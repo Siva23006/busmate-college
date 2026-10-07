@@ -16,9 +16,9 @@ export function MapView({ children, center, zoom = 12, className, onClick }:
     return (
       <div className={cn("surface-2 border-app grid place-items-center rounded-2xl border border-dashed p-6 text-center", className)}>
         <div>
-          <MapPinOff className="text-muted mx-auto mb-2 h-6 w-6" />
-          <p className="font-semibold">Map not configured</p>
-          <p className="text-muted mt-1 text-sm">Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to <code>admin-dashboard/.env.local</code> and restart <code>npm run dev</code>.</p>
+          <MapPinOff className="text-muted mx-auto mb-2 h-5 w-5" />
+          <p className="text-sm font-semibold">Map not configured</p>
+          <p className="text-muted mt-1 text-[13px]">Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to <code>admin-dashboard/.env.local</code> and restart <code>npm run dev</code>.</p>
         </div>
       </div>
     );
@@ -123,21 +123,32 @@ export function useAnimatedPosition(target: LatLng | null, durationMs = 1200): L
 
 const FRESH_COLOR = { LIVE: "#16a34a", DELAYED: "#d97706", OFFLINE: "#dc2626", IDLE: "#64748b" } as const;
 
-export function BusMarker({ position, label, heading, freshness, selected, demo, onClick }: {
+/**
+ * Bus on the map: a coloured rounded label (bus number + speed) above a heading arrow.
+ * Green = running, amber = stopped / delayed, red = offline, slate = not on a trip.
+ */
+export function BusMarker({ position, label, heading, freshness, selected, demo, onClick, moving, speedKmh }: {
   position: LatLng; label: string; heading: number | null; freshness: keyof typeof FRESH_COLOR;
   selected?: boolean; demo?: boolean; onClick?: () => void;
+  /** When given, a LIVE bus that is not moving is shown amber ("Stopped"). */
+  moving?: boolean;
+  speedKmh?: number | null;
 }) {
   const pos = useAnimatedPosition(position);
   if (!pos) return null;
-  const color = FRESH_COLOR[freshness];
+  const color = freshness === "LIVE" && moving === false ? FRESH_COLOR.DELAYED : FRESH_COLOR[freshness];
   return (
     <AdvancedMarker position={pos} onClick={onClick} zIndex={selected ? 100 : 10}>
-      <div className="flex flex-col items-center">
-        <div className={cn("mb-1 rounded-lg px-2 py-0.5 text-[11px] font-bold text-white shadow", selected ? "bg-amber-brand !text-ink-950" : "bg-ink-900")}>
-          {label}{demo ? " · DEMO" : ""}
+      <div className={cn("flex flex-col items-center transition-transform duration-200", selected && "scale-110")}>
+        <div className={cn("mb-1 flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-[3px] text-[11px] font-bold leading-none text-white shadow-md",
+          selected && "ring-2 ring-white ring-offset-2 ring-offset-blue-600")} style={{ background: color }}>
+          {label}
+          {speedKmh != null && <span className="font-semibold opacity-90">· {speedKmh} km/h</span>}
+          {demo && <span className="opacity-90">· DEMO</span>}
         </div>
-        <div className="relative grid h-9 w-9 place-items-center rounded-full border-[3px] border-white shadow-lg" style={{ background: color }}>
-          <svg viewBox="0 0 24 24" className="h-4 w-4" style={{ transform: `rotate(${heading ?? 0}deg)` }}>
+        <div className="relative grid h-7 w-7 place-items-center rounded-full border-[2.5px] border-white shadow-lg" style={{ background: color }}>
+          {freshness === "LIVE" && <span className="absolute inset-0 animate-ping rounded-full opacity-30" style={{ background: color }} />}
+          <svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5" style={{ transform: `rotate(${heading ?? 0}deg)` }}>
             <path d="M12 3 19 20 12 16 5 20Z" fill="white" />
           </svg>
         </div>
@@ -154,7 +165,7 @@ export function StopMarker({ stop, highlight, onClick }: { stop: Stop; highlight
           highlight ? "bg-amber-brand text-ink-950" : "bg-ink-700 text-white")}>
           {stop.stop_order}
         </div>
-        <div className="mt-0.5 rounded bg-white/90 px-1.5 text-[10px] font-semibold text-ink-900 shadow-sm">{stop.stop_name}</div>
+        <div className="mt-0.5 whitespace-nowrap rounded-md bg-white/95 px-1.5 py-px text-[10px] font-semibold text-ink-900 shadow-sm">{stop.stop_name}</div>
       </div>
     </AdvancedMarker>
   );

@@ -38,7 +38,7 @@ class BusMateDriverApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: context.watch<ThemeController>().mode, // dark by default
+      themeMode: context.watch<ThemeController>().mode, // light by default, dark is a toggle
       home: const RootGate(),
     );
   }

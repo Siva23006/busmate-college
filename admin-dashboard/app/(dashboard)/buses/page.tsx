@@ -1,13 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Crosshair, Pencil, Plus, Trash2 } from "lucide-react";
+import { Bus as BusIcon, Crosshair, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { busApi, driverApi, routeApi } from "@/services/busmate";
 import { errorMessage } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { Bus } from "@/types";
-import { Badge, Button, Card, DemoBadge, EmptyState, ErrorBox, Field, Input, Modal, PageHeader, Select, Table, TableSkeleton, Td, busStatusTone } from "@/components/ui";
+import { Badge, Button, Card, DemoBadge, EmptyState, ErrorBox, Field, Input, Modal, PageHeader, Select, Table, TableSkeleton, Td, Toolbar, busStatusLabel, busStatusTone } from "@/components/ui";
 
 type Form = { bus_number: string; registration_number: string; capacity: string; status: Bus["status"]; driver_id: string; route_id: string };
 const empty: Form = { bus_number: "", registration_number: "", capacity: "", status: "INACTIVE", driver_id: "", route_id: "" };
@@ -22,6 +22,7 @@ export default function BusesPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const openNew = () => { setEditing(null); setForm(empty); setFormError(null); setOpen(true); };
   const openEdit = (b: Bus) => {
@@ -60,18 +61,31 @@ export default function BusesPage() {
   }
 
   const list = (buses.data ?? []).filter((b) =>
-    `${b.bus_number} ${b.registration_number ?? ""} ${b.driver_name ?? ""} ${b.route_name ?? ""}`.toLowerCase().includes(search.toLowerCase()));
+    `${b.bus_number} ${b.registration_number ?? ""} ${b.driver_name ?? ""} ${b.route_name ?? ""}`.toLowerCase().includes(search.toLowerCase())
+    && (!statusFilter || (statusFilter === "ON_TRIP" ? !!b.active_trip_id : b.status === statusFilter)));
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
     <>
-      <PageHeader title="Buses" subtitle="Add buses and assign a driver and route to each."
-        actions={<><Input placeholder="Search buses" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56" />
-          <Button onClick={openNew}><Plus className="h-4 w-4" /> Add bus</Button></>} />
+      <PageHeader title="Buses" subtitle="Every college bus. Add a bus, then assign its driver and route so it can be tracked."
+        actions={<Button onClick={openNew}><Plus className="h-4 w-4" /> Add bus</Button>} />
       {buses.error && <div className="mb-4"><ErrorBox message={buses.error} onRetry={buses.reload} /></div>}
       <Card>
+        <Toolbar right={<span className="text-muted text-xs">{list.length} of {buses.data?.length ?? 0} buses</span>}>
+          <div className="relative w-full sm:w-64">
+            <Search className="text-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            <Input placeholder="Search bus, driver or route" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="sm:w-44" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option value="ON_TRIP">On a trip now</option>
+            {["ACTIVE", "INACTIVE", "MAINTENANCE", "OFFLINE"].map((s) => <option key={s} value={s}>{busStatusLabel(s)}</option>)}
+          </Select>
+        </Toolbar>
         {buses.loading ? <TableSkeleton /> : !list.length ? (
-          <EmptyState title="No buses" text="Add your first college bus to start tracking." action={<Button onClick={openNew}>Add bus</Button>} />
+          buses.data?.length
+            ? <EmptyState icon={Search} title="No buses match" text="Try a different search or set the status filter to “All statuses”." />
+            : <EmptyState icon={BusIcon} title="No buses yet" text="Add your first college bus, then assign a driver and a route so it shows up on the live map." action={<Button onClick={openNew}><Plus className="h-4 w-4" /> Add bus</Button>} />
         ) : (
           <Table head={["Bus number", "Registration", "Driver", "Route", "Status", "Current speed", "Last update", "Actions"]}>
             {list.map((b) => (
@@ -80,14 +94,14 @@ export default function BusesPage() {
                 <Td>{b.registration_number ?? "-"}</Td>
                 <Td>{b.driver_name ?? <span className="text-muted">Unassigned</span>}</Td>
                 <Td>{b.route_name ?? <span className="text-muted">Unassigned</span>}</Td>
-                <Td><Badge tone={busStatusTone(b.status)} dot>{b.status}</Badge>{b.active_trip_id && <span className="text-muted ml-2 text-xs">on trip</span>}</Td>
+                <Td><span className="flex items-center gap-1.5"><Badge tone={busStatusTone(b.status)} dot>{busStatusLabel(b.status)}</Badge>{b.active_trip_id && <Badge tone="blue" dot pulse>On trip</Badge>}</span></Td>
                 <Td>{b.active_trip_id && b.speed != null ? `${Math.round(b.speed * 3.6)} km/h` : "-"}</Td>
                 <Td>{timeAgo(b.location_time)}</Td>
                 <Td>
                   <div className="flex gap-1">
-                    <Link href={`/track?bus=${b.id}`} className="inline-flex items-center gap-1 rounded-xl px-2 py-2 text-xs font-bold hover:bg-[var(--surface-2)]" title="Track this bus"><Crosshair className="h-4 w-4" /> Track</Link>
-                    <Button variant="ghost" className="px-2" onClick={() => openEdit(b)} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" className="px-2 text-red-600" onClick={() => remove(b)} aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
+                    <Link href={`/track?bus=${b.id}`} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-primary-text transition hover:bg-primary-soft" title="Track this bus"><Crosshair className="h-3.5 w-3.5" /> Track</Link>
+                    <Button variant="ghost" className="px-2 py-1.5" onClick={() => openEdit(b)} aria-label="Edit" title="Edit"><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" className="px-2 py-1.5 !text-red-600" onClick={() => remove(b)} aria-label="Delete" title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </Td>
               </tr>
@@ -105,7 +119,7 @@ export default function BusesPage() {
           <Field label="Capacity"><Input type="number" min={1} value={form.capacity} onChange={set("capacity")} /></Field>
           <Field label="Status">
             <Select value={form.status} onChange={set("status")}>
-              {["ACTIVE", "INACTIVE", "MAINTENANCE", "OFFLINE"].map((s) => <option key={s}>{s}</option>)}
+              {["ACTIVE", "INACTIVE", "MAINTENANCE", "OFFLINE"].map((s) => <option key={s} value={s}>{busStatusLabel(s)}</option>)}
             </Select>
           </Field>
           <Field label="Driver">

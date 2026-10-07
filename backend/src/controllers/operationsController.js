@@ -56,6 +56,12 @@ async function driverHome(req, res) {
   });
 }
 
+/** The signed-in driver's last 20 trips (Trips tab in the driver app). */
+async function driverTrips(req, res) {
+  const driver = await tripService.driverForUser(req.user);
+  res.json({ trips: await tripModel.listForDriver(driver.id, 20) });
+}
+
 // ---------------- Student home ----------------
 async function studentProfile(req) {
   const student = await studentModel.findByUserId(req.user.id);
@@ -156,6 +162,6 @@ const notifications = {
 };
 
 module.exports = {
-  trips, postLocation, driverHome, studentHome, studentBuses, studentChooseBus, studentChooseStop,
+  trips, postLocation, driverHome, driverTrips, studentHome, studentBuses, studentChooseBus, studentChooseStop,
   dashboardStats, alerts, notifications,
 };

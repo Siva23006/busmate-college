@@ -88,6 +88,7 @@ router.post('/tracking/location', DRIVER, trackingLimiter, validate({ body: v.lo
 
 // ---------- Driver / student app screens ----------
 router.get('/driver/home', DRIVER, h(ops.driverHome));
+router.get('/driver/trips', DRIVER, h(ops.driverTrips));
 router.get('/student/home', STUDENT, h(ops.studentHome));
 router.get('/student/buses', STUDENT, h(ops.studentBuses));
 router.put('/student/bus', STUDENT, validate({ body: v.chooseBus }), h(ops.studentChooseBus));

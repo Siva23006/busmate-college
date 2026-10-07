@@ -12,6 +12,9 @@ const String fromCollege = 'FROM_COLLEGE';
 String directionLabel(String? direction) => direction == fromCollege ? 'From College' : 'To College';
 String directionShift(String? direction) => direction == fromCollege ? 'EVENING' : 'MORNING';
 
+/// "Morning Trip" / "Evening Trip".
+String directionTrip(String? direction) => direction == fromCollege ? 'Evening Trip' : 'Morning Trip';
+
 /// Before 12:00 the next run is the morning one to the college.
 String directionForTime(DateTime now) => now.hour < 12 ? toCollege : fromCollege;
 
@@ -154,9 +157,10 @@ class Trip {
 }
 
 class DriverHome {
-  DriverHome({required this.name, required this.employeeId, required this.buses, this.activeTrip});
+  DriverHome({required this.name, required this.employeeId, required this.buses, this.activeTrip, this.phone});
   final String name;
   final String employeeId;
+  final String? phone;
   final List<BusInfo> buses;
   final Trip? activeTrip;
 
@@ -165,6 +169,7 @@ class DriverHome {
     return DriverHome(
       name: d['name'] as String? ?? '',
       employeeId: d['employeeId'] as String? ?? '',
+      phone: d['phone']?.toString(),
       buses: ((j['buses'] as List?) ?? []).map((b) => BusInfo.fromJson(b as Map<String, dynamic>)).toList(),
       activeTrip: j['activeTrip'] is Map<String, dynamic> ? Trip.fromJson(j['activeTrip'] as Map<String, dynamic>) : null,
     );

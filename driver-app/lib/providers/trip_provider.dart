@@ -28,6 +28,11 @@ class TripProvider extends ChangeNotifier {
   Trip? lastCompleted;
   bool _starting = false;
 
+  /// The driver's recent trips (Trips tab). null = not loaded yet.
+  List<Trip>? history;
+  bool historyLoading = false;
+  String? historyError;
+
   BusInfo? busById(int id) {
     for (final b in home?.buses ?? <BusInfo>[]) {
       if (b.id == id) return b;
@@ -54,6 +59,26 @@ class TripProvider extends ChangeNotifier {
       error = e.message;
     } finally {
       loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadHistory() async {
+    if (historyLoading) return;
+    historyLoading = true;
+    historyError = null;
+    notifyListeners();
+    try {
+      final res = await api.get('/driver/trips');
+      history = ((res['trips'] as List?) ?? const []).whereType<Map<String, dynamic>>().map(Trip.fromJson).toList();
+    } on ApiException catch (e) {
+      if (e.status == 404) {
+        history = const <Trip>[]; // older server without trip history
+      } else {
+        historyError = e.message;
+      }
+    } finally {
+      historyLoading = false;
       notifyListeners();
     }
   }
@@ -92,6 +117,7 @@ class TripProvider extends ChangeNotifier {
     final done = Trip.fromJson(res['trip'] as Map<String, dynamic>);
     lastCompleted = done;
     activeTrip = null;
+    history = null; // reload the Trips tab next time
     notifyListeners();
     loadHome();
     return done;
@@ -109,6 +135,8 @@ class TripProvider extends ChangeNotifier {
     activeTrip = null;
     activeBus = null;
     lastCompleted = null;
+    history = null;
+    historyError = null;
     notifyListeners();
   }
 

@@ -7,8 +7,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 
-/// Small look-only Google map for the active trip: the route line, its stops and the bus.
-/// It follows the bus; the driver never has to touch it.
+/// Look-only Google map for the active trip: the route line, its stops and the bus.
+/// It follows the bus; the driver never has to touch it. Use a `GlobalKey<TripMapState>` to call
+/// [TripMapState.recenter] / [TripMapState.showWholeRoute] from buttons drawn over the map.
 class TripMap extends StatefulWidget {
   const TripMap({
     super.key,
@@ -45,12 +46,15 @@ class TripMap extends StatefulWidget {
   final double height;
 
   @override
-  State<TripMap> createState() => _TripMapState();
+  State<TripMap> createState() => TripMapState();
 }
 
-class _TripMapState extends State<TripMap> {
+class TripMapState extends State<TripMap> {
   static const _followZoom = 15.0;
   GoogleMapController? _map;
+
+  /// False after "show whole route" until the driver taps recenter, so new fixes do not zoom back in.
+  bool _follow = true;
   BitmapDescriptor? _busIcon;
   BitmapDescriptor? _stopIcon;
   BitmapDescriptor? _endIcon;
@@ -83,23 +87,45 @@ class _TripMapState extends State<TripMap> {
   void didUpdateWidget(TripMap old) {
     super.didUpdateWidget(old);
     final p = widget.position;
-    if (p != null && p != old.position) _map?.animateCamera(CameraUpdate.newLatLngZoom(p, _followZoom));
+    // Camera moves only when a new fix arrives (never on a timer).
+    if (_follow && p != null && p != old.position) _map?.animateCamera(CameraUpdate.newLatLngZoom(p, _followZoom));
   }
 
-  void _onCreated(GoogleMapController c) {
-    _map = c;
-    final line = _line;
-    if (widget.position != null || line.length < 2) return;
-    // No GPS fix yet: show the whole route.
-    double minLat = line.first.latitude, maxLat = minLat, minLng = line.first.longitude, maxLng = minLng;
-    for (final p in line) {
+  /// Centre on the bus again and keep following it.
+  void recenter() {
+    _follow = true;
+    final p = widget.position;
+    if (p != null) _map?.animateCamera(CameraUpdate.newLatLngZoom(p, _followZoom));
+  }
+
+  /// Zoom out to the whole route (and the bus); stops following until [recenter].
+  void showWholeRoute() {
+    final c = _map;
+    final bounds = _bounds([..._line, if (widget.position != null) widget.position!]);
+    if (c == null || bounds == null) return;
+    _follow = false;
+    c.animateCamera(CameraUpdate.newLatLngBounds(bounds, 48));
+  }
+
+  static LatLngBounds? _bounds(List<LatLng> points) {
+    if (points.length < 2) return null;
+    double minLat = points.first.latitude, maxLat = minLat, minLng = points.first.longitude, maxLng = minLng;
+    for (final p in points) {
       minLat = math.min(minLat, p.latitude);
       maxLat = math.max(maxLat, p.latitude);
       minLng = math.min(minLng, p.longitude);
       maxLng = math.max(maxLng, p.longitude);
     }
-    if (minLat == maxLat && minLng == maxLng) return;
-    c.moveCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng)), 28));
+    if (minLat == maxLat && minLng == maxLng) return null;
+    return LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng));
+  }
+
+  void _onCreated(GoogleMapController c) {
+    _map = c;
+    if (widget.position != null) return;
+    // No GPS fix yet: show the whole route.
+    final bounds = _bounds(_line);
+    if (bounds != null) c.moveCamera(CameraUpdate.newLatLngBounds(bounds, 28));
   }
 
   @override
@@ -173,12 +199,12 @@ class _TripMapState extends State<TripMap> {
               bottom: widget.badgeBottom,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(color: BrandColors.ink.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(16)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: BrandColors.ink.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(14)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2.5, color: BrandColors.amber)),
-                    const SizedBox(width: 10),
-                    Flexible(child: Text(widget.waitingText, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
+                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: BrandColors.amber)),
+                    const SizedBox(width: 8),
+                    Flexible(child: Text(widget.waitingText, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600))),
                   ]),
                 ),
               ),

@@ -86,6 +86,15 @@ async function stopEvents(tripId, direction = 'TO_COLLEGE') {
   return direction === 'FROM_COLLEGE' ? events.reverse() : events;
 }
 
+/** A driver's most recent trips (newest first), for the driver app's Trips tab. */
+async function listForDriver(driverId, limit = 20) {
+  const { rows } = await db.query(
+    `${SELECT} WHERE t.driver_id = $1 ORDER BY t.start_time DESC NULLS LAST, t.id DESC LIMIT $2`,
+    [driverId, limit],
+  );
+  return rows;
+}
+
 /** All trips of one bus on one date (oldest first), for the Track Bus timeline. */
 async function listForBusDay(busId, date) {
   const { rows } = await db.query(
@@ -105,4 +114,4 @@ async function daysForBus(busId, limit = 30) {
   return rows;
 }
 
-module.exports = { listForBusDay, daysForBus, list, findById, findActiveByBus, listActive, createActive, complete, path, stopEvents };
+module.exports = { listForDriver, listForBusDay, daysForBus, list, findById, findActiveByBus, listActive, createActive, complete, path, stopEvents };

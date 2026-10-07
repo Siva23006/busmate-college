@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { GraduationCap, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { busApi, routeApi, studentApi } from "@/services/busmate";
 import { errorMessage } from "@/lib/api";
@@ -57,11 +57,14 @@ export default function StudentsPage() {
 
   return (
     <>
-      <PageHeader title="Students" subtitle="Students log in to the BusMate Student app with their Student ID or email."
+      <PageHeader title="Students" subtitle="Student accounts. Assign each student a route and stop so the Student app shows their bus and arrival time."
         actions={<Button onClick={openNew}><Plus className="h-4 w-4" /> Add student</Button>} />
-      <Card className="mb-4 p-4">
-        <form className="grid gap-3 sm:grid-cols-5" onSubmit={(e) => { e.preventDefault(); setApplied(filters); }}>
-          <Input placeholder="Search name, ID, email" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} className="sm:col-span-2" />
+      <Card className="mb-4 p-3">
+        <form className="grid gap-2 sm:grid-cols-5" onSubmit={(e) => { e.preventDefault(); setApplied(filters); }}>
+          <div className="relative sm:col-span-2">
+            <Search className="text-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            <Input placeholder="Search name, ID, email" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} className="pl-9" />
+          </div>
           <Select value={filters.department} onChange={(e) => setFilters((f) => ({ ...f, department: e.target.value }))}>
             <option value="">All departments</option>{departments.map((d) => <option key={d}>{d}</option>)}
           </Select>
@@ -78,7 +81,7 @@ export default function StudentsPage() {
       </Card>
       {students.error && <div className="mb-4"><ErrorBox message={students.error} onRetry={students.reload} /></div>}
       <Card>
-        {students.loading ? <TableSkeleton /> : !students.data?.length ? <EmptyState title="No students found" action={<Button onClick={openNew}>Add student</Button>} /> : (
+        {students.loading ? <TableSkeleton /> : !students.data?.length ? <EmptyState icon={GraduationCap} title="No students found" text="Add a student, or change the filters above and press Filter." action={<Button onClick={openNew}><Plus className="h-4 w-4" /> Add student</Button>} /> : (
           <Table head={["Name", "Student ID", "Department", "Year", "Route", "Stop", "Bus", "Actions"]}>
             {students.data.map((s) => (
               <tr key={s.id} className="hover:bg-[var(--surface-2)]">
@@ -90,8 +93,8 @@ export default function StudentsPage() {
                 <Td>{s.assigned_stop_name ?? "-"}</Td>
                 <Td>{s.bus_number ?? "-"}</Td>
                 <Td><div className="flex gap-1">
-                  <Button variant="ghost" className="px-2" onClick={() => openEdit(s)} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" className="px-2 text-red-600" onClick={() => remove(s)} aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" className="px-2 py-1.5" onClick={() => openEdit(s)} aria-label="Edit" title="Edit"><Pencil className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" className="px-2 py-1.5 !text-red-600" onClick={() => remove(s)} aria-label="Delete" title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div></Td>
               </tr>
             ))}

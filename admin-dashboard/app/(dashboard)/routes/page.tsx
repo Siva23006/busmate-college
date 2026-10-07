@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, Plus, Route as RouteIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAsync } from "@/hooks/useAsync";
 import { routeApi } from "@/services/busmate";
@@ -30,18 +30,18 @@ export default function RoutesPage() {
 
   return (
     <>
-      <PageHeader title="Routes" subtitle="Create a route, then add its stops on the map in order."
+      <PageHeader title="Routes" subtitle="A route is the path a bus follows. Create one, then click the map to add its stops in morning order."
         actions={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Create route</Button>} />
       {routes.error && <div className="mb-4"><ErrorBox message={routes.error} onRetry={routes.reload} /></div>}
       <Card>
         {routes.loading ? <TableSkeleton /> : !routes.data?.length ? (
-          <EmptyState title="No routes" text="Create your first bus route." action={<Button onClick={() => setOpen(true)}>Create route</Button>} />
+          <EmptyState icon={RouteIcon} title="No routes yet" text="Create your first route, add its stops on the map, then assign it to a bus on the Buses page." action={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Create route</Button>} />
         ) : (
           <Table head={["Route", "From → To", "Stops", "Buses", "Status", ""]}>
             {routes.data.map((r) => (
               <tr key={r.id} className="cursor-pointer hover:bg-[var(--surface-2)]" onClick={() => router.push(`/routes/${r.id}`)}>
                 <Td className="font-semibold"><span className="flex items-center gap-2">{r.route_name}{r.is_demo && <DemoBadge />}</span></Td>
-                <Td>{r.start_location ?? "-"} → {r.destination ?? "-"}</Td>
+                <Td className="text-muted">{r.start_location ?? "-"} → {r.destination ?? "-"}</Td>
                 <Td>{r.stop_count ?? 0}</Td>
                 <Td>{r.buses?.map((b) => b.bus_number).join(", ") || <span className="text-muted">None</span>}</Td>
                 <Td><Badge tone={r.active ? "green" : "slate"} dot>{r.active ? "Active" : "Disabled"}</Badge></Td>

@@ -73,3 +73,16 @@ export function etaMinutes(seconds: number | null | undefined): string {
   const m = Math.round(seconds / 60);
   return m < 1 ? "< 1 min" : `${m} min`;
 }
+
+const ALERT_TITLES: Record<string, string> = {
+  GPS_POOR: "Poor GPS accuracy", BUS_OFFLINE: "Bus offline", OVERSPEED: "Overspeed", ROUTE_DEVIATION: "Route deviation",
+};
+/** Plain-language alert title: "BUS_OFFLINE" -> "Bus offline". */
+export function alertTitle(type: string): string {
+  return ALERT_TITLES[type] ?? type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** Today's date as YYYY-MM-DD in the browser's time zone. */
+export function localDate(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

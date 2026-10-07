@@ -1,12 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { ChevronRight, Download, History } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { busApi, tripApi } from "@/services/busmate";
 import { clock, duration, km, tripTitle } from "@/lib/format";
 import type { Trip } from "@/types";
-import { Badge, Button, Card, DemoBadge, EmptyState, ErrorBox, Input, PageHeader, Select, Table, TableSkeleton, Td, type Tone } from "@/components/ui";
+import { Badge, Button, Card, DemoBadge, EmptyState, ErrorBox, Input, PageHeader, Select, Table, TableSkeleton, Td, Toolbar, type Tone } from "@/components/ui";
 
 const STATUS_TONE: Record<Trip["status"], Tone> = { ACTIVE: "green", COMPLETED: "blue", SCHEDULED: "slate", CANCELLED: "red" };
 
@@ -28,20 +28,20 @@ export default function TripsPage() {
 
   return (
     <>
-      <PageHeader title="Trips" subtitle="Trip history with route replay."
+      <PageHeader title="Trips" subtitle="Every trip a driver has run. Filter by day, bus or status, open a trip to replay it on the map, or export a CSV report."
         actions={<Button variant="secondary" disabled={!trips.data?.length} onClick={() => trips.data && exportCsv(trips.data)}><Download className="h-4 w-4" /> Export report</Button>} />
-      <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-3">
-        <Input type="date" value={filters.date} onChange={(e) => setFilters((f) => ({ ...f, date: e.target.value }))} />
-        <Select value={filters.busId} onChange={(e) => setFilters((f) => ({ ...f, busId: e.target.value }))}>
-          <option value="">All buses</option>{buses.data?.map((b) => <option key={b.id} value={b.id}>{b.bus_number}</option>)}
-        </Select>
-        <Select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
-          <option value="">All statuses</option>{["ACTIVE", "COMPLETED", "SCHEDULED", "CANCELLED"].map((s) => <option key={s}>{s}</option>)}
-        </Select>
-      </Card>
       {trips.error && <div className="mb-4"><ErrorBox message={trips.error} onRetry={trips.reload} /></div>}
       <Card>
-        {trips.loading ? <TableSkeleton /> : !trips.data?.length ? <EmptyState title="No trips found" text="Trips appear here once a driver presses START TRIP." /> : (
+        <Toolbar right={(filters.date || filters.busId || filters.status) ? <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => setFilters({ status: "", busId: "", date: "" })}>Clear filters</Button> : undefined}>
+          <Input type="date" value={filters.date} onChange={(e) => setFilters((f) => ({ ...f, date: e.target.value }))} className="sm:w-44" aria-label="Trip date" />
+          <Select value={filters.busId} onChange={(e) => setFilters((f) => ({ ...f, busId: e.target.value }))} className="sm:w-40" aria-label="Bus">
+            <option value="">All buses</option>{buses.data?.map((b) => <option key={b.id} value={b.id}>{b.bus_number}</option>)}
+          </Select>
+          <Select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="sm:w-40" aria-label="Status">
+            <option value="">All statuses</option>{["ACTIVE", "COMPLETED", "SCHEDULED", "CANCELLED"].map((s) => <option key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</option>)}
+          </Select>
+        </Toolbar>
+        {trips.loading ? <TableSkeleton /> : !trips.data?.length ? <EmptyState icon={History} title="No trips found" text={(filters.date || filters.busId || filters.status) ? "No trip matches these filters. Clear them to see all trips." : "Trips appear here once a driver presses START TRIP in the Driver app."} /> : (
           <Table head={["Date", "Bus", "Driver", "Route", "Direction", "Start", "End", "Duration", "Distance", "Status", ""]}>
             {trips.data.map((t) => (
               <tr key={t.id} className="hover:bg-[var(--surface-2)]">
@@ -54,8 +54,8 @@ export default function TripsPage() {
                 <Td>{clock(t.end_time)}</Td>
                 <Td>{duration(t.duration_seconds)}</Td>
                 <Td>{km(t.distance_meters)}</Td>
-                <Td><span className="flex gap-1"><Badge tone={STATUS_TONE[t.status]}>{t.status}</Badge>{t.is_simulation && <DemoBadge />}</span></Td>
-                <Td><Link href={`/trips/${t.id}`} className="text-sm font-semibold hover:underline">View / replay</Link></Td>
+                <Td><span className="flex gap-1"><Badge tone={STATUS_TONE[t.status]} dot pulse={t.status === "ACTIVE"}>{t.status.charAt(0) + t.status.slice(1).toLowerCase()}</Badge>{t.is_simulation && <DemoBadge />}</span></Td>
+                <Td><Link href={`/trips/${t.id}`} className="inline-flex items-center gap-0.5 text-xs font-semibold text-primary-text hover:underline">View / replay <ChevronRight className="h-3.5 w-3.5" /></Link></Td>
               </tr>
             ))}
           </Table>

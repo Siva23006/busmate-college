@@ -10,30 +10,112 @@ import '../providers/session_provider.dart';
 import '../providers/trip_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
-import '../widgets/trip_map.dart';
 import 'start_trip_screen.dart';
+import 'tabs/profile_tab.dart';
+import 'tabs/route_tab.dart';
+import 'tabs/trips_tab.dart';
 
+/// Pre-trip shell: Home · Route · Trips · Profile.
+/// The chosen bus and run (morning / evening) are kept here so every tab shows the same one.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> {
+  int _tab = 0;
   int? _selectedBusId;
-  String _gps = 'CHECKING'; // CHECKING, READY, OFF, NO PERMISSION
+  // Morning run before noon, evening run after; the driver can change it.
+  String _direction = directionForTime(DateTime.now());
+
+  @override
+  void initState() {
+    super.initState();
+    // After the first frame: loading notifies listeners, which must not happen during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<TripProvider>().loadHome();
+    });
+  }
+
+  void _setDirection(String d) => setState(() => _direction = d);
+
+  @override
+  Widget build(BuildContext context) {
+    final trips = context.watch<TripProvider>();
+    final buses = trips.home?.buses ?? const <BusInfo>[];
+    final bus = buses.isEmpty ? null : buses.firstWhere((b) => b.id == _selectedBusId, orElse: () => buses.first);
+
+    final Widget page = switch (_tab) {
+      1 => RouteTab(bus: bus, direction: _direction, onDirection: _setDirection),
+      2 => const TripsTab(),
+      3 => ProfileTab(buses: buses),
+      _ => _HomeTab(
+          bus: bus,
+          buses: buses,
+          direction: _direction,
+          onDirection: _setDirection,
+          onBus: (id) => setState(() => _selectedBusId = id),
+        ),
+    };
+
+    return PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _tab = 0); // back from another tab returns to Home
+      },
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, a) => FadeTransition(
+              opacity: a,
+              child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, 0.015), end: Offset.zero).animate(a), child: child),
+            ),
+            child: KeyedSubtree(key: ValueKey(_tab), child: page),
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+            NavigationDestination(icon: Icon(Icons.route_outlined), selectedIcon: Icon(Icons.route_rounded), label: 'Route'),
+            NavigationDestination(icon: Icon(Icons.history_rounded), selectedIcon: Icon(Icons.history), label: 'Trips'),
+            NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Home: your bus, which run, pre-trip checklist and START TRIP.
+class _HomeTab extends StatefulWidget {
+  const _HomeTab({required this.bus, required this.buses, required this.direction, required this.onDirection, required this.onBus});
+  final BusInfo? bus;
+  final List<BusInfo> buses;
+  final String direction;
+  final ValueChanged<String> onDirection;
+  final ValueChanged<int> onBus;
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> with WidgetsBindingObserver {
   bool? _locationOn; // null while checking
   LocationPermission? _permission; // null while checking
   bool _online = true;
-  // Morning run before noon, evening run after; the driver can change it.
-  String _direction = directionForTime(DateTime.now());
   StreamSubscription<List<ConnectivityResult>>? _connSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    context.read<TripProvider>().loadHome();
     _checkGps();
     Connectivity().checkConnectivity().then(_setConn);
     _connSub = Connectivity().onConnectivityChanged.listen(_setConn);
@@ -55,13 +137,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _locationOn = enabled;
       _permission = perm;
-      if (!enabled) {
-        _gps = 'OFF';
-      } else if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-        _gps = 'NO PERMISSION';
-      } else {
-        _gps = 'READY';
-      }
     });
   }
 
@@ -76,20 +151,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _checkGps();
   }
 
-  Future<void> _logout() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Log out?', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('CANCEL')),
-          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('LOG OUT')),
-        ],
-      ),
-    );
-    if (ok == true && mounted) context.read<SessionProvider>().logout();
-  }
-
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -100,11 +161,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final trips = context.watch<TripProvider>();
-    final theme = context.watch<ThemeController>();
     final home = trips.home;
-    final buses = home?.buses ?? const <BusInfo>[];
-    final bus = buses.isEmpty ? null : buses.firstWhere((b) => b.id == _selectedBusId, orElse: () => buses.first);
-    final hint = Theme.of(context).hintColor;
+    final bus = widget.bus;
+    final buses = widget.buses;
+    final direction = widget.direction;
+    final hint = context.hint;
     final name = home?.name ?? context.watch<SessionProvider>().user?.name ?? 'Driver';
     final canStart = bus != null && bus.route != null && bus.status != 'MAINTENANCE';
 
@@ -112,107 +173,123 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final permission = _permission;
     final permissionOk = permission == LocationPermission.always || permission == LocationPermission.whileInUse;
     final (gpsValue, gpsLevel) = switch (_locationOn) {
-      null => ('CHECKING', Level.warn),
-      true => ('READY', Level.good),
-      false => ('TURNED OFF', Level.bad),
+      null => ('Checking', Level.warn),
+      true => ('Ready', Level.good),
+      false => ('Turned off', Level.bad),
     };
     final (netValue, netLevel) = !_online
-        ? ('OFFLINE', Level.bad)
+        ? ('Offline', Level.bad)
         : trips.error == null
-            ? ('CONNECTED', Level.good)
-            : ('UNSTABLE', Level.warn);
+            ? ('Ready', Level.good)
+            : ('Unstable', Level.warn);
     final (permValue, permLevel) = permission == null
-        ? ('CHECKING', Level.warn)
+        ? ('Checking', Level.warn)
         : permissionOk
-            ? ('ALLOWED', Level.good)
+            ? ('Ready', Level.good)
             : permission == LocationPermission.deniedForever
-                ? ('BLOCKED', Level.bad)
-                : ('NOT ALLOWED', Level.warn);
-    final allReady = _gps == 'READY' && netLevel == Level.good;
+                ? ('Blocked', Level.bad)
+                : ('Not allowed', Level.warn);
+    final readyCount = [gpsLevel, netLevel, permLevel].where((l) => l == Level.good).length;
+    final allReady = readyCount == 3;
 
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: Ui.pad,
-        title: Row(children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: BrandColors.amber, borderRadius: BorderRadius.circular(13)),
-            child: const Icon(Icons.directions_bus_rounded, color: BrandColors.ink, size: 26),
-          ),
-          const SizedBox(width: 12),
-          const Text('BUSMATE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2.5)),
+    var step = 0;
+    Widget item(Widget child) => FadeSlideIn(delay: FadeSlideIn.stagger(step++, stepMs: 70), child: child);
+
+    return RefreshIndicator(
+      color: BrandColors.amber,
+      onRefresh: () async {
+        await trips.loadHome();
+        await _checkGps();
+      },
+      child: ListView(padding: const EdgeInsets.fromLTRB(Ui.pad, 6, Ui.pad, 28), children: [
+        // Top bar
+        Row(children: [
+          const LogoTile(size: 36),
+          const SizedBox(width: 10),
+          const Text('BUSMATE', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2.2)),
+          const Spacer(),
+          const ThemeToggleButton(),
+          IconButton(tooltip: 'Log out', icon: const Icon(Icons.logout_rounded), onPressed: () => confirmLogout(context)),
         ]),
-        actions: [
-          IconButton(
-            tooltip: theme.isDark ? 'Light mode' : 'Dark mode',
-            icon: Icon(theme.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
-            onPressed: theme.toggle,
+        const SizedBox(height: 14),
+        item(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Hello, $name', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          Text(home == null ? 'Driver' : 'Driver ID ${home.employeeId}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: hint)),
+        ])),
+        const SizedBox(height: 16),
+        if (trips.error != null) ...[ErrorBanner(trips.error!, onRetry: trips.loadHome), const SizedBox(height: Ui.gap)],
+        if (trips.loading && home == null) const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator())),
+        if (home != null && buses.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(children: [
+                const IconTile(icon: Icons.info_outline_rounded, color: BrandColors.yellow),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('No bus is assigned to you yet. Please contact the transport office.',
+                      style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface)),
+                ),
+              ]),
+            ),
           ),
-          IconButton(tooltip: 'Logout', icon: const Icon(Icons.logout_rounded), onPressed: _logout),
-          const SizedBox(width: 8),
+        if (buses.length > 1) ...[
+          const SectionLabel('Select bus'),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final b in buses)
+              ChoiceChip(
+                label: Text(b.number, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                selected: b.id == bus?.id,
+                showCheckmark: false,
+                selectedColor: BrandColors.amber.withValues(alpha: 0.3),
+                materialTapTargetSize: MaterialTapTargetSize.padded,
+                onSelected: (_) => widget.onBus(b.id),
+              ),
+          ]),
+          const SizedBox(height: 16),
         ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await trips.loadHome();
-          await _checkGps();
-        },
-        child: ListView(padding: const EdgeInsets.fromLTRB(Ui.pad, 4, Ui.pad, 32), children: [
-          Text('Hello, $name', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
-          if (home != null) Text('Driver ID ${home.employeeId}', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: hint)),
-          const SizedBox(height: Ui.gap),
-          if (trips.error != null) ...[ErrorBanner(trips.error!, onRetry: trips.loadHome), const SizedBox(height: Ui.gap)],
-          if (trips.loading && home == null) const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator())),
-          if (home != null && buses.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No bus is assigned to you yet. Please contact the transport office.', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
+        if (bus != null) ...[
+          item(_BusCard(bus: bus, direction: direction)),
+          if (bus.route != null) ...[
+            const SizedBox(height: 20),
+            item(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const SectionLabel('Select Trip'),
+              DirectionSelector(value: direction, onChanged: widget.onDirection, route: bus.route),
+            ])),
+          ],
+          const SizedBox(height: 20),
+          item(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SectionLabel(
+              'Pre-Trip Checklist',
+              trailing: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: Pill(
+                  key: ValueKey(readyCount),
+                  label: '$readyCount/3 Ready',
+                  color: allReady ? BrandColors.green : BrandColors.yellow,
+                  icon: allReady ? Icons.check_rounded : Icons.schedule_rounded,
+                ),
               ),
             ),
-          if (buses.length > 1) ...[
-            const SectionLabel('Select bus'),
-            Wrap(spacing: 10, runSpacing: 10, children: [
-              for (final b in buses) _BusChoice(label: b.number, selected: b.id == bus?.id, onTap: () => setState(() => _selectedBusId = b.id)),
-            ]),
-            const SizedBox(height: Ui.gap),
-          ],
-          if (bus != null) ...[
-            _HeroCard(bus: bus, direction: _direction, onDirection: (d) => setState(() => _direction = d)),
-            if (bus.route != null) ...[
-              const SizedBox(height: Ui.pad),
-              const SectionLabel('Route to follow'),
-              TripMap(
-                key: ValueKey('preview-${bus.id}-$_direction'),
-                route: bus.route,
-                direction: _direction,
-                height: 210,
-                preview: true, // shows the driver's own blue dot, no "waiting for GPS" badge
-              ),
-              const SizedBox(height: 8),
-              _StopStrip(stops: bus.route!.stopsFor(_direction)),
-            ],
-            const SizedBox(height: Ui.pad),
-            const SectionLabel('Ready to drive'),
             Card(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 child: Column(children: [
                   ChecklistRow(
                     icon: Icons.gps_fixed_rounded,
-                    label: 'GPS ready',
+                    label: 'GPS Ready',
                     value: gpsValue,
                     level: gpsLevel,
                     action: 'Tap to turn on Location',
                     onTap: _locationOn == false ? _fixLocation : null,
                   ),
                   const Divider(),
-                  ChecklistRow(icon: Icons.wifi_rounded, label: 'Network connected', value: netValue, level: netLevel),
+                  ChecklistRow(icon: Icons.wifi_rounded, label: 'Network Connected', value: netValue, level: netLevel),
                   const Divider(),
                   ChecklistRow(
-                    icon: Icons.verified_user_rounded,
-                    label: 'Location permission',
+                    icon: Icons.location_on_rounded,
+                    label: 'Location Permission',
                     value: permValue,
                     level: permLevel,
                     action: permission == LocationPermission.deniedForever ? 'Tap to open app settings' : 'Tap to allow',
@@ -221,162 +298,105 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ]),
               ),
             ),
-            const SizedBox(height: Ui.pad),
+          ])),
+          const SizedBox(height: 20),
+          item(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: BrandColors.green,
                 foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(84),
-                textStyle: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                disabledBackgroundColor: BrandColors.green.withValues(alpha: 0.3),
+                disabledForegroundColor: Colors.white70,
+                textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 1.2),
               ),
               onPressed: canStart
-                  ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => StartTripScreen(bus: bus, direction: _direction)))
+                  ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => StartTripScreen(bus: bus, direction: direction)))
                   : null,
-              icon: const Icon(Icons.play_arrow_rounded, size: 40),
+              icon: const Icon(Icons.play_arrow_rounded, size: 24),
               label: const Text('START TRIP'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               bus.route == null
                   ? 'This bus has no route yet. Contact the transport office.'
                   : bus.status == 'MAINTENANCE'
                       ? 'This bus is marked as under maintenance.'
                       : allReady
-                          ? '${directionShift(_direction)} run · ${bus.route!.startFor(_direction) ?? 'Start'} → ${bus.route!.destinationFor(_direction) ?? 'College'}'
+                          ? 'All set. You will confirm the trip on the next screen.'
                           : 'Fix the items above. You will be asked again when you start.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: hint),
+              style: TextStyle(fontSize: 12, color: hint),
             ),
-          ],
-        ]),
-      ),
-    );
-  }
-}
-
-/// Bus number, route and the morning / evening choice.
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.bus, required this.direction, required this.onDirection});
-  final BusInfo bus;
-  final String direction;
-  final ValueChanged<String> onDirection;
-
-  @override
-  Widget build(BuildContext context) {
-    final route = bus.route;
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [BrandColors.ink3, BrandColors.ink]),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Text('YOUR BUS', style: TextStyle(color: Colors.white60, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
-          const Spacer(),
-          if (bus.isDemo) const DemoTag(),
-        ]),
-        const SizedBox(height: 4),
-        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          const Icon(Icons.directions_bus_rounded, color: BrandColors.amber, size: 40),
-          const SizedBox(width: 12),
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(bus.number, style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900, height: 1.1)),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        if (route == null)
-          const Text('No route assigned', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w700))
-        else ...[
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            layoutBuilder: (current, previous) => Stack(alignment: Alignment.centerLeft, children: [...previous, if (current != null) current]),
-            child: Row(key: ValueKey(direction), children: [
-              Flexible(child: Text(route.startFor(direction) ?? 'Start', style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800))),
-              const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Icon(Icons.arrow_forward_rounded, color: BrandColors.amber, size: 24)),
-              Flexible(child: Text(route.destinationFor(direction) ?? 'College', style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800))),
-            ]),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${route.name} · ${route.stops.length} stops'
-            '${route.timeFor(direction) != null ? ' · leaves ${clock12(route.timeFor(direction))}' : ''}',
-            style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 20),
-          const Text('WHICH TRIP?', style: TextStyle(color: Colors.white60, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
-          const SizedBox(height: 10),
-          DirectionSelector(value: direction, onChanged: onDirection, route: route),
+          ])),
         ],
       ]),
     );
   }
 }
 
-class _BusChoice extends StatelessWidget {
-  const _BusChoice({required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+/// "YOUR BUS" card: status, bus number, where this run goes and when.
+class _BusCard extends StatelessWidget {
+  const _BusCard({required this.bus, required this.direction});
+  final BusInfo bus;
+  final String direction;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        constraints: const BoxConstraints(minHeight: Ui.touch, minWidth: 96),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? scheme.primary : scheme.surface,
-          borderRadius: BorderRadius.circular(Ui.radiusSmall),
-          border: Border.all(color: selected ? scheme.primary : scheme.outlineVariant, width: 2),
-        ),
-        child: Text(label, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: selected ? scheme.onPrimary : scheme.onSurface)),
-      ),
-    );
-  }
-}
-
-
-/// Horizontal list of stops in travel order: 1 Start · 2 ... · last (flag).
-class _StopStrip extends StatelessWidget {
-  const _StopStrip({required this.stops});
-  final List<StopInfo> stops;
-
-  @override
-  Widget build(BuildContext context) {
-    if (stops.isEmpty) return const SizedBox.shrink();
-    final hint = Theme.of(context).hintColor;
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: stops.length,
-        separatorBuilder: (_, __) => Icon(Icons.chevron_right_rounded, color: hint),
-        itemBuilder: (context, i) {
-          final last = i == stops.length - 1;
-          return Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: last ? BrandColors.amber : Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: last ? BrandColors.amber : Theme.of(context).colorScheme.outlineVariant),
+    final route = bus.route;
+    final hint = context.hint;
+    final (statusText, statusColor) = bus.status == 'MAINTENANCE'
+        ? ('Maintenance', BrandColors.red)
+        : route == null
+            ? ('No route', BrandColors.yellow)
+            : ('Active', BrandColors.green);
+    final time = route?.timeFor(direction);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Stack(children: [
+        Positioned.fill(child: RoutePattern(color: BrandColors.amber.withValues(alpha: context.isDarkTheme ? 0.10 : 0.16))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text('YOUR BUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: hint)),
+              const Spacer(),
+              if (bus.isDemo) ...[const DemoTag(), const SizedBox(width: 6)],
+              Pill(label: statusText, color: statusColor, dot: true),
+            ]),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(bus.number, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 0.4, height: 1.15)),
             ),
-            child: Text('${i + 1}. ${stops[i].name}',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: last ? BrandColors.ink : null)),
-          );
-        },
-      ),
+            const SizedBox(height: 8),
+            if (route == null)
+              Text('No route assigned', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: hint))
+            else
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, a) => FadeTransition(
+                  opacity: a,
+                  child: SlideTransition(position: Tween<Offset>(begin: const Offset(0.04, 0), end: Offset.zero).animate(a), child: child),
+                ),
+                layoutBuilder: (current, previous) => Stack(alignment: Alignment.topLeft, children: [...previous, if (current != null) current]),
+                child: Column(key: ValueKey(direction), crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(
+                    '${(route.startFor(direction) ?? 'Start').toUpperCase()}  →  ${(route.destinationFor(direction) ?? 'College').toUpperCase()}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.3, color: context.amberText),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${route.name} · ${route.stops.length} stops · ${directionTrip(direction)}${time != null ? ' (${clock12(time)})' : ''}',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: hint),
+                  ),
+                ]),
+              ),
+          ]),
+        ),
+      ]),
     );
   }
 }

@@ -1,16 +1,12 @@
 "use client";
 import { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { BellOff, CheckCircle2 } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { useLiveBuses } from "@/hooks/useLiveBuses";
 import { alertApi } from "@/services/busmate";
 import { errorMessage } from "@/lib/api";
-import { dateTime, timeAgo } from "@/lib/format";
-import { Badge, Button, Card, EmptyState, ErrorBox, PageHeader, Table, TableSkeleton, Td } from "@/components/ui";
-
-const LABEL: Record<string, string> = {
-  GPS_POOR: "Poor GPS accuracy", BUS_OFFLINE: "Bus offline", OVERSPEED: "Overspeed", ROUTE_DEVIATION: "Route deviation",
-};
+import { alertTitle, dateTime, timeAgo } from "@/lib/format";
+import { Badge, Button, Card, EmptyState, ErrorBox, PageHeader, Segmented, Table, TableSkeleton, Td } from "@/components/ui";
 
 export default function AlertsPage() {
   const [resolved, setResolved] = useState(false);
@@ -24,26 +20,21 @@ export default function AlertsPage() {
 
   return (
     <>
-      <PageHeader title="Alerts" subtitle="GPS problems, offline buses, overspeed and route deviation. Severity: INFO, WARNING, CRITICAL."
-        actions={<div className="surface flex rounded-xl p-1 text-sm font-semibold">
-          {[false, true].map((r) => (
-            <button key={String(r)} onClick={() => setResolved(r)} className={`rounded-lg px-3 py-1.5 ${resolved === r ? "bg-ink-900 text-white dark:bg-amber-brand dark:text-ink-950" : ""}`}>
-              {r ? "Resolved" : "Open"}
-            </button>
-          ))}
-        </div>} />
+      <PageHeader title="Alerts" subtitle="Problems that need your attention: weak GPS, offline buses, overspeed and route deviation. Resolve an alert once it is handled."
+        actions={<Segmented value={resolved ? "resolved" : "open"} onChange={(v) => setResolved(v === "resolved")}
+          options={[{ value: "open", label: "Open" }, { value: "resolved", label: "Resolved" }]} />} />
       {alerts.error && <div className="mb-4"><ErrorBox message={alerts.error} onRetry={alerts.reload} /></div>}
       <Card>
-        {alerts.loading ? <TableSkeleton /> : !alerts.data?.length ? <EmptyState title={resolved ? "No resolved alerts" : "No open alerts"} text="All buses are behaving." /> : (
+        {alerts.loading ? <TableSkeleton /> : !alerts.data?.length ? <EmptyState icon={resolved ? BellOff : CheckCircle2} title={resolved ? "No resolved alerts yet" : "No open alerts"} text={resolved ? "Alerts you resolve are kept here for reference." : "All buses are behaving. New alerts appear here and in the bell at the top."} /> : (
           <Table head={["Severity", "Type", "Bus", "Message", "When", ""]}>
             {alerts.data.map((a) => (
               <tr key={a.id} className="hover:bg-[var(--surface-2)]">
-                <Td><Badge tone={a.severity === "CRITICAL" ? "red" : a.severity === "WARNING" ? "amber" : "blue"} dot>{a.severity}</Badge></Td>
-                <Td className="font-semibold">{LABEL[a.type] ?? a.type}</Td>
+                <Td><Badge tone={a.severity === "CRITICAL" ? "red" : a.severity === "WARNING" ? "amber" : "blue"} dot pulse={a.severity === "CRITICAL" && !a.resolved}>{a.severity === "CRITICAL" ? "Critical" : a.severity === "WARNING" ? "Warning" : "Info"}</Badge></Td>
+                <Td className="font-semibold">{alertTitle(a.type)}</Td>
                 <Td>{a.bus_number ?? "-"}</Td>
                 <Td className="max-w-md whitespace-normal">{a.message}</Td>
                 <Td><span title={dateTime(a.created_at)}>{timeAgo(a.created_at)}</span></Td>
-                <Td>{!a.resolved && <Button variant="secondary" className="py-1.5 text-xs" onClick={() => resolve(a.id)}><CheckCircle2 className="h-4 w-4" /> Resolve</Button>}</Td>
+                <Td>{!a.resolved && <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => resolve(a.id)}><CheckCircle2 className="h-3.5 w-3.5" /> Resolve</Button>}</Td>
               </tr>
             ))}
           </Table>
