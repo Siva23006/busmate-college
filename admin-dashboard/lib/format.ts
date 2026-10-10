@@ -75,7 +75,7 @@ export function etaMinutes(seconds: number | null | undefined): string {
 }
 
 const ALERT_TITLES: Record<string, string> = {
-  GPS_POOR: "Poor GPS accuracy", BUS_OFFLINE: "Bus offline", OVERSPEED: "Overspeed", ROUTE_DEVIATION: "Route deviation",
+  GPS_POOR: "Poor GPS accuracy", BUS_OFFLINE: "Bus offline", OVERSPEED: "Overspeed", ROUTE_DEVIATION: "Off route", SOS: "SOS / emergency",
 };
 /** Plain-language alert title: "BUS_OFFLINE" -> "Bus offline". */
 export function alertTitle(type: string): string {
@@ -85,4 +85,14 @@ export function alertTitle(type: string): string {
 /** Today's date as YYYY-MM-DD in the browser's time zone. */
 export function localDate(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** "Today" / "Yesterday" / "Mon, 6 Oct 2026" for grouping lists by day. */
+export function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const y = new Date(); y.setDate(today.getDate() - 1);
+  if (localDate(d) === localDate(today)) return "Today";
+  if (localDate(d) === localDate(y)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }

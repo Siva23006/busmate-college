@@ -8,6 +8,7 @@ const studentModel = require('../models/studentModel');
 const tripService = require('../services/tripService');
 const trackingService = require('../services/trackingService');
 const alertService = require('../services/alertService');
+const settingsService = require('../services/settingsService');
 
 // ---------------- Trips ----------------
 const trips = {
@@ -47,6 +48,7 @@ async function driverHome(req, res) {
   const activeTrip = driver.active_trip_id ? await tripModel.findById(driver.active_trip_id) : null;
   const withRoutes = await Promise.all(buses.map(async (b) => ({
     ...b,
+    speed_limit_effective: await settingsService.speedLimitFor(b.speed_limit_kmh), // shown in the driver app
     route: b.route_id ? await routeModel.findById(b.route_id) : null,
   })));
   res.json({
@@ -134,7 +136,7 @@ async function dashboardStats(_req, res) {
       (SELECT count(*) FROM trips WHERE status = 'ACTIVE')::int                 AS active_trips,
       (SELECT count(*) FROM students)::int                                      AS total_students,
       (SELECT count(*) FROM drivers WHERE status = 'ACTIVE')::int               AS active_drivers,
-      (SELECT count(*) FROM alerts WHERE NOT resolved)::int                     AS open_alerts`);
+      (SELECT count(*) FROM alerts WHERE NOT resolved AND type = ANY($1))::int AS open_alerts`, [alertService.IMPORTANT_TYPES]);
   res.json({ stats: rows[0] });
 }
 
@@ -147,7 +149,31 @@ const alerts = {
     if (!alert) throw AppError.notFound('Alert');
     res.json({ alert });
   },
+  async resolveAll(_req, res) {
+    res.json({ resolved: await alertService.resolveAll() });
+  },
+  /** Speed limit settings: default for all buses + each bus's own limit. */
+  async getSettings(_req, res) {
+    const { rows } = await db.query('SELECT id, bus_number, speed_limit_kmh FROM buses ORDER BY bus_number');
+    res.json({ defaultSpeedLimitKmh: await settingsService.defaultSpeedLimit(), buses: rows });
+  },
+  async saveSettings(req, res) {
+    const { defaultSpeedLimitKmh, buses } = req.valid.body;
+    if (defaultSpeedLimitKmh !== undefined) await settingsService.set('default_speed_limit_kmh', defaultSpeedLimitKmh);
+    for (const b of buses || []) {
+      await db.query('UPDATE buses SET speed_limit_kmh = $2 WHERE id = $1', [b.id, b.speedLimitKmh ?? null]);
+    }
+    tripStateRefresh();
+    const { rows } = await db.query('SELECT id, bus_number, speed_limit_kmh FROM buses ORDER BY bus_number');
+    res.json({ defaultSpeedLimitKmh: await settingsService.defaultSpeedLimit(), buses: rows });
+  },
 };
+
+/** Running trips pick up a changed bus limit on their next GPS point. */
+function tripStateRefresh() {
+  // eslint-disable-next-line global-require
+  for (const st of require('../services/tripState').all()) st.speedLimitCheckedAt = 0;
+}
 
 // ---------------- Notifications (inbox) ----------------
 const notifications = {
@@ -159,6 +185,18 @@ const notifications = {
   async markRead(req, res) {
     await db.query('UPDATE notifications SET read = TRUE WHERE id = $1 AND user_id = $2', [req.valid.params.id, req.user.id]);
     res.json({ ok: true });
+  },
+  async markAllRead(req, res) {
+    await db.query('UPDATE notifications SET read = TRUE WHERE user_id = $1 AND NOT read', [req.user.id]);
+    res.json({ ok: true });
+  },
+  async remove(req, res) {
+    await db.query('DELETE FROM notifications WHERE id = $1 AND user_id = $2', [req.valid.params.id, req.user.id]);
+    res.status(204).end();
+  },
+  async clear(req, res) {
+    await db.query('DELETE FROM notifications WHERE user_id = $1', [req.user.id]);
+    res.status(204).end();
   },
 };
 

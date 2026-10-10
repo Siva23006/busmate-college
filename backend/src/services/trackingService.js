@@ -12,6 +12,7 @@ const { computeEta } = require('./etaEngine');
 const { evaluateGeofence } = require('./geofenceEngine');
 const realtime = require('./realtime');
 const alertService = require('./alertService');
+const settingsService = require('./settingsService');
 const notificationService = require('./notificationService');
 
 const latestEta = new Map(); // busId -> last computed ETA (served by GET /api/buses/:id/eta)
@@ -69,10 +70,7 @@ async function processLocation(user, payload) {
   }
 
   if (!reliable) {
-    alertService.raise({
-      busId: trip.bus_id, tripId: trip.id, type: 'GPS_POOR', severity: 'WARNING',
-      message: `${trip.bus_number}: poor GPS accuracy (±${Math.round(loc.accuracy)} m).`,
-    }).catch(() => {});
+    // Weak GPS is common (traffic, tunnels) and not an admin alert; clients just show "GPS weak".
     // Preserve the last reliable location; tell clients GPS is weak.
     realtime.toBusAndAdmins(trip.bus_id, 'bus:status', {
       busId: Number(trip.bus_id), status: 'GPS_POOR', accuracy: loc.accuracy,
@@ -187,10 +185,17 @@ async function processLocation(user, payload) {
 
   // Overspeed
   const speedKmh = loc.speed != null ? loc.speed * 3.6 : null;
-  if (speedKmh != null && speedKmh > env.OVERSPEED_KMH) {
+  // Speed limit set by the admin (this bus's own limit, else the default). Re-read once a minute.
+  if (!state.speedLimitCheckedAt || Date.now() - state.speedLimitCheckedAt > 60_000) {
+    state.speedLimitCheckedAt = Date.now();
+    const { rows } = await db.query('SELECT speed_limit_kmh FROM buses WHERE id = $1', [trip.bus_id]);
+    state.speedLimit = await settingsService.speedLimitFor(rows[0] && rows[0].speed_limit_kmh);
+  }
+  const limit = state.speedLimit || env.OVERSPEED_KMH;
+  if (speedKmh != null && speedKmh > limit) {
     alertService.raise({
       busId: trip.bus_id, tripId: trip.id, type: 'OVERSPEED', severity: 'CRITICAL',
-      message: `${trip.bus_number}: overspeed ${Math.round(speedKmh)} km/h (limit ${env.OVERSPEED_KMH}).`,
+      message: `${trip.bus_number}: overspeed ${Math.round(speedKmh)} km/h (limit ${limit} km/h).`,
     }).catch(() => {});
   }
 
@@ -214,6 +219,7 @@ async function processLocation(user, payload) {
     isSimulation: trip.is_simulation, // clients must show "DEMO / SIMULATION" when true
     atStopId: state.insideStopId ? Number(state.insideStopId) : null,
     start: state.start, // where this trip started: shown as the START pin on every map
+    speedLimitKmh: limit,
     eta,
   };
   realtime.toBusAndAdmins(trip.bus_id, 'bus:location', message);
@@ -226,6 +232,7 @@ async function processLocation(user, payload) {
 
   return {
     accepted: true, reliable: true, accuracyLevel: level,
+    speedLimitKmh: limit, // the driver app turns the speed red above this
     // Small ETA summary for the driver app's trip screen.
     eta: eta && {
       nextStop: eta.nextStop,

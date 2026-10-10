@@ -15,7 +15,7 @@ const STOPS: [number, number][] = [[230, 320], [430, 260], [560, 105]];
 const FEATURES = [
   { icon: Navigation, title: "Live bus map", text: "See every college bus move in real time." },
   { icon: Clock3, title: "Arrival estimates", text: "Next stop and college ETA for each bus." },
-  { icon: BellRing, title: "Instant alerts", text: "Offline buses, weak GPS and overspeed." },
+  { icon: BellRing, title: "Instant alerts", text: "Overspeed, offline buses and off-route." },
 ];
 
 export default function LoginPage() {

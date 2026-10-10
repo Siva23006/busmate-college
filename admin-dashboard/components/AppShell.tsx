@@ -29,7 +29,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "Reports", items: [
     { href: "/trips", label: "Trips", icon: History, hint: "Trip history and replay" },
-    { href: "/alerts", label: "Alerts", icon: AlertTriangle, hint: "GPS, offline, overspeed" },
+    { href: "/alerts", label: "Alerts", icon: AlertTriangle, hint: "Overspeed, offline, off route" },
     { href: "/analytics", label: "Analytics", icon: BarChart3, hint: "Trips and distance" },
   ] },
   { title: "System", items: [

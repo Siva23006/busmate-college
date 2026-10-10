@@ -75,4 +75,13 @@ export const tripApi = {
 export const alertApi = {
   list: (resolved = false) => api<{ alerts: Alert[] }>(`/alerts?resolved=${resolved}`),
   resolve: (id: number) => api<{ alert: Alert }>(`/alerts/${id}/resolve`, { method: "PATCH" }),
+  resolveAll: () => api<{ resolved: number }>("/alerts/resolve-all", { method: "POST" }),
+  settings: () => api<SpeedSettings>("/settings/alerts"),
+  saveSettings: (body: { defaultSpeedLimitKmh?: number; buses?: { id: number; speedLimitKmh: number | null }[] }) =>
+    api<SpeedSettings>("/settings/alerts", { method: "PUT", body }),
 };
+
+export interface SpeedSettings {
+  defaultSpeedLimitKmh: number;
+  buses: { id: number; bus_number: string; speed_limit_kmh: number | null }[];
+}

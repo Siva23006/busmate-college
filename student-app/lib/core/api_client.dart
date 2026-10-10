@@ -27,6 +27,7 @@ class ApiClient {
   Future<Map<String, dynamic>> post(String path, [Map<String, dynamic>? body]) => _send('POST', path, body);
   Future<Map<String, dynamic>> put(String path, [Map<String, dynamic>? body]) => _send('PUT', path, body);
   Future<Map<String, dynamic>> patch(String path, [Map<String, dynamic>? body]) => _send('PATCH', path, body);
+  Future<Map<String, dynamic>> delete(String path) => _send('DELETE', path);
 
   Future<Map<String, dynamic>> _send(String method, String path, [Map<String, dynamic>? body]) async {
     final uri = Uri.parse('${AppConfig.apiUrl}/api$path');

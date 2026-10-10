@@ -51,16 +51,95 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _ => (Icons.notifications_rounded, BrandColors.indigo),
       };
 
+  Future<void> _clearAll(BusProvider p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Clear all alerts?'),
+        content: const Text('This removes every message from this list.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Clear all', style: TextStyle(color: BrandColors.red))),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await p.clearNotifications();
+      } catch (_) {
+        await p.loadNotifications();
+      }
+    }
+  }
+
+  static String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
+
+  static String _dayTitle(DateTime d) {
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (_dayKey(d) == _dayKey(now)) return 'Today';
+    if (_dayKey(d) == _dayKey(yesterday)) return 'Yesterday';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.watch<BusProvider>();
     final pal = Palette.of(context);
     final count = p.notifications.length;
+
+    // Build "Today / Yesterday / date" sections (list is newest first).
+    final rows = <Widget>[];
+    String? lastKey;
+    var i = 0;
+    for (final n in p.notifications) {
+      final local = n.createdAt.toLocal();
+      final key = _dayKey(local);
+      if (key != lastKey) {
+        lastKey = key;
+        rows.add(Padding(
+          padding: EdgeInsets.fromLTRB(4, rows.isEmpty ? 4 : 14, 4, 8),
+          child: Text(_dayTitle(local).toUpperCase(),
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: pal.muted)),
+        ));
+      }
+      rows.add(Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Dismissible(
+          key: ValueKey<int>(n.id),
+          direction: DismissDirection.endToStart,
+          onDismissed: (_) => p.removeNotification(n.id),
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            decoration: BoxDecoration(color: BrandColors.red.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.delete_outline_rounded, color: BrandColors.red),
+          ),
+          child: FadeSlideIn(index: i < 8 ? i : 0, child: _AlertCard(n: n, style: _style(n.type))),
+        ),
+      ));
+      i++;
+    }
+
     return Scaffold(
-      appBar: bmAppBar(context, 'Alerts', subtitle: count == 0 ? 'Trip started, approaching and reached' : '$count message${count == 1 ? '' : 's'}'),
+      appBar: bmAppBar(
+        context,
+        'Alerts',
+        subtitle: count == 0 ? 'Trip started, approaching and reached' : '$count message${count == 1 ? '' : 's'} · swipe left to remove',
+        actions: [
+          if (count > 0)
+            IconButton(
+              tooltip: 'Clear all',
+              icon: const Icon(Icons.delete_sweep_rounded),
+              onPressed: () => _clearAll(p),
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: p.loadNotifications,
-        child: p.notifications.isEmpty
+        child: count == 0
             ? ListView(padding: const EdgeInsets.fromLTRB(16, 24, 16, 24), children: [
                 FadeSlideIn(
                   child: BmCard(
@@ -68,7 +147,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: Column(children: [
                       const IconTile(icon: Icons.notifications_none_rounded, color: BrandColors.indigo, size: 52),
                       const SizedBox(height: 14),
-                      Text('No alerts yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: pal.text)),
+                      Text('No alerts', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: pal.text)),
                       const SizedBox(height: 4),
                       Text('You will be told when your bus starts, is near your stop, and arrives.',
                           textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: pal.muted, height: 1.4)),
@@ -76,16 +155,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ),
               ])
-            : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                itemCount: count,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) => FadeSlideIn(
-                  key: ValueKey<int>(p.notifications[i].id),
-                  index: i < 8 ? i : 0,
-                  child: _AlertCard(n: p.notifications[i], style: _style(p.notifications[i].type)),
-                ),
-              ),
+            : ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: rows),
       ),
     );
   }
@@ -116,7 +186,7 @@ class _AlertCard extends StatelessWidget {
                     style: TextStyle(fontSize: 14, fontWeight: n.read ? FontWeight.w600 : FontWeight.w800, color: pal.text)),
               ),
               const SizedBox(width: 8),
-              Text(agoText(n.createdAt), style: TextStyle(fontSize: 11, color: pal.muted)),
+              Text(clockTime(n.createdAt.toLocal()), style: TextStyle(fontSize: 11, color: pal.muted)),
               if (!n.read) ...[
                 const SizedBox(width: 6),
                 Container(width: 7, height: 7, decoration: const BoxDecoration(color: BrandColors.amber, shape: BoxShape.circle)),

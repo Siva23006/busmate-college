@@ -130,6 +130,11 @@ const notificationPrefs = z.object({
   enabled: z.boolean().optional(),
   alertMinutes: z.coerce.number().int().min(1).max(60).optional(), // alert this many minutes before my stop
 }).refine((v) => v.enabled !== undefined || v.alertMinutes !== undefined, { message: 'Nothing to update' });
+const speedLimit = z.coerce.number().int().min(10).max(150);
+const alertSettings = z.object({
+  defaultSpeedLimitKmh: speedLimit.optional(),
+  buses: z.array(z.object({ id, speedLimitKmh: speedLimit.nullable().optional() })).max(500).optional(),
+});
 const chooseStop = z.object({ stopId: id });
 const chooseBus = z.object({ busId: id });
 
@@ -142,5 +147,5 @@ module.exports = {
   routeCreate, routeUpdate, stopCreate, stopUpdate, stopReorder, stopsQuery,
   driverCreate, driverUpdate, studentCreate, studentUpdate, studentsQuery,
   tripStart, tripEnd, tripsQuery, location,
-  fcmToken, notificationPrefs, chooseStop, chooseBus,
+  fcmToken, notificationPrefs, alertSettings, chooseStop, chooseBus,
 };

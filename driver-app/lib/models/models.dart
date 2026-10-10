@@ -103,7 +103,7 @@ class RouteInfo {
 }
 
 class BusInfo {
-  BusInfo({required this.id, required this.number, required this.status, this.registration, this.route, this.activeTripId, this.isDemo = false});
+  BusInfo({required this.id, required this.number, required this.status, this.registration, this.route, this.activeTripId, this.isDemo = false, this.speedLimitKmh});
   final int id;
   final String number;
   final String status;
@@ -111,6 +111,9 @@ class BusInfo {
   final RouteInfo? route;
   final int? activeTripId;
   final bool isDemo;
+
+  /// Speed limit set by the admin for this bus (km/h).
+  final int? speedLimitKmh;
 
   factory BusInfo.fromJson(Map<String, dynamic> j) => BusInfo(
         id: _int(j['id'])!,
@@ -120,6 +123,7 @@ class BusInfo {
         route: j['route'] is Map<String, dynamic> ? RouteInfo.fromJson(j['route'] as Map<String, dynamic>) : null,
         activeTripId: _int(j['active_trip_id']),
         isDemo: j['is_demo'] == true,
+        speedLimitKmh: _int(j['speed_limit_effective']) ?? _int(j['speed_limit_kmh']),
       );
 }
 

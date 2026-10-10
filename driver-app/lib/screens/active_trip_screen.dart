@@ -84,6 +84,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
       total: total,
       passed: passed,
       arriveAt: t.destinationEtaSeconds == null ? null : DateTime.now().add(Duration(seconds: t.destinationEtaSeconds!)),
+      speedLimitKmh: bus?.speedLimitKmh,
     );
 
     return PopScope(
@@ -115,6 +116,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     final trip = info.trip;
     final fix = t.lastFix;
     final speedKmh = fix == null || fix.speed < 0 ? null : (fix.speed * 3.6).round();
+    final limit = t.speedLimitKmh ?? info.speedLimitKmh;
+    final overLimit = limit != null && speedKmh != null && speedKmh > limit;
     final shown = fix ?? t.lastKnown; // last known spot keeps the map useful until the first live fix
     final startFix = t.startFix;
     final wait = t.secondsWithoutFix;
@@ -187,16 +190,22 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
               _MapButton(icon: Icons.route_rounded, tooltip: 'Show whole route', onTap: () => _mapKey.currentState?.showWholeRoute()),
             ]),
           ),
-          // Speed
+          // Speed (turns red above the admin's speed limit)
           Positioned(
             left: 12,
             bottom: 12,
             child: _DarkChip(
-              child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-                Text(speedKmh?.toString() ?? '--',
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800, height: 1, fontFeatures: [FontFeature.tabularFigures()])),
-                const SizedBox(width: 4),
-                const Text('km/h', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+              color: overLimit ? BrandColors.red : null,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, mainAxisSize: MainAxisSize.min, children: [
+                  Text(speedKmh?.toString() ?? '--',
+                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800, height: 1, fontFeatures: [FontFeature.tabularFigures()])),
+                  const SizedBox(width: 4),
+                  const Text('km/h', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+                if (limit != null)
+                  Text(overLimit ? 'SLOW DOWN · limit $limit' : 'Limit $limit',
+                      style: TextStyle(color: overLimit ? Colors.white : Colors.white60, fontSize: 11, fontWeight: FontWeight.w700)),
               ]),
             ),
           ),
@@ -285,6 +294,7 @@ class _TripInfo {
     required this.total,
     required this.passed,
     required this.arriveAt,
+    this.speedLimitKmh,
   });
   final Trip trip;
   final String busNumber;
@@ -294,6 +304,7 @@ class _TripInfo {
   final int total;
   final int passed;
   final DateTime? arriveAt;
+  final int? speedLimitKmh;
 }
 
 class _LiveBanner extends StatelessWidget {
@@ -364,15 +375,19 @@ class _MapButton extends StatelessWidget {
 }
 
 class _DarkChip extends StatelessWidget {
-  const _DarkChip({required this.child});
+  const _DarkChip({required this.child, this.color});
   final Widget child;
+
+  /// Background override (e.g. red when over the speed limit).
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: BrandColors.ink.withValues(alpha: 0.9),
+        color: color ?? BrandColors.ink.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(14),
         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 3))],
       ),

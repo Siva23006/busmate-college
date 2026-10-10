@@ -313,11 +313,26 @@ class BusProvider extends ChangeNotifier {
   }
 
   Future<void> markAllRead() async {
-    for (final n in notifications.where((n) => !n.read).toList()) {
+    if (!notifications.any((n) => !n.read)) return;
+    for (final n in notifications) {
       n.read = true;
-      api.patch('/notifications/${n.id}/read').catchError((_) => <String, dynamic>{});
     }
     notifyListeners();
+    api.patch('/notifications/read-all').catchError((_) => <String, dynamic>{});
+  }
+
+  /// Removes one message from the list (swipe away).
+  Future<void> removeNotification(int id) async {
+    notifications.removeWhere((n) => n.id == id);
+    notifyListeners();
+    api.delete('/notifications/$id').catchError((_) => <String, dynamic>{});
+  }
+
+  /// Empties the whole list.
+  Future<void> clearNotifications() async {
+    notifications.clear();
+    notifyListeners();
+    await api.delete('/notifications');
   }
 
   Future<void> setNotificationsEnabled(bool enabled) async {

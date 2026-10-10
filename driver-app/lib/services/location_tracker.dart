@@ -90,6 +90,9 @@ class LocationTracker extends ChangeNotifier {
   int stopsPassed = 0;
   int stopsTotal = 0;
 
+  /// Speed limit for this bus, from the server (admin setting).
+  int? speedLimitKmh;
+
   int? _tripId;
   bool _listening = false;
   StreamSubscription<List<ConnectivityResult>>? _connSub;
@@ -273,6 +276,7 @@ class LocationTracker extends ChangeNotifier {
     }
     sentCount++;
     lastSentAt = DateTime.now();
+    if (r['speedLimitKmh'] is num) speedLimitKmh = (r['speedLimitKmh'] as num).toInt();
     lastServerMessage = null;
     final eta = r['eta'];
     if (eta is Map) {

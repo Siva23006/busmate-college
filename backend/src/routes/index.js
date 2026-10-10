@@ -102,9 +102,15 @@ router.put('/student/stop', STUDENT, validate({ body: v.chooseStop }), h(ops.stu
 router.get('/dashboard/stats', ADMIN, h(ops.dashboardStats));
 router.get('/alerts', ADMIN, h(ops.alerts.list));
 router.patch('/alerts/:id/resolve', ADMIN, byId, h(ops.alerts.resolve));
+router.post('/alerts/resolve-all', ADMIN, h(ops.alerts.resolveAll));
+router.get('/settings/alerts', ADMIN, h(ops.alerts.getSettings));
+router.put('/settings/alerts', ADMIN, validate({ body: v.alertSettings }), h(ops.alerts.saveSettings));
 
 // ---------- Notifications ----------
 router.get('/notifications', ANY, h(ops.notifications.list));
+router.patch('/notifications/read-all', ANY, h(ops.notifications.markAllRead));
 router.patch('/notifications/:id/read', ANY, byId, h(ops.notifications.markRead));
+router.delete('/notifications', ANY, h(ops.notifications.clear));
+router.delete('/notifications/:id', ANY, byId, h(ops.notifications.remove));
 
 module.exports = router;
