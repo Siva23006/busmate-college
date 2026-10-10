@@ -23,6 +23,9 @@ class BusProvider extends ChangeNotifier {
   int? myStopId;
   String? myStopName;
   bool notificationsEnabled = true;
+
+  /// Alert me this many minutes before the bus reaches my stop.
+  int alertMinutes = 10;
   BusInfo? bus;
   RouteInfo? route;
   bool loading = false;
@@ -134,6 +137,7 @@ class BusProvider extends ChangeNotifier {
       myStopId = s['stopId'] is num ? (s['stopId'] as num).toInt() : null;
       myStopName = s['stopName'] as String?;
       notificationsEnabled = s['notificationsEnabled'] != false;
+      if (s['alertMinutes'] is num) alertMinutes = (s['alertMinutes'] as num).toInt();
       bus = res['bus'] is Map<String, dynamic> ? BusInfo.fromJson(res['bus'] as Map<String, dynamic>) : null;
       route = res['route'] is Map<String, dynamic> ? RouteInfo.fromJson(res['route'] as Map<String, dynamic>) : null;
       eta = Eta.fromJson(res['eta']) ?? eta;
@@ -323,6 +327,19 @@ class BusProvider extends ChangeNotifier {
       await api.put('/me/notifications', {'enabled': enabled});
     } on ApiException {
       notificationsEnabled = !enabled;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> setAlertMinutes(int minutes) async {
+    final old = alertMinutes;
+    alertMinutes = minutes;
+    notifyListeners();
+    try {
+      await api.put('/me/notifications', {'alertMinutes': minutes});
+    } on ApiException {
+      alertMinutes = old;
       notifyListeners();
       rethrow;
     }

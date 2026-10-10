@@ -9,13 +9,15 @@ import 'providers/session_provider.dart';
 import 'screens/main_shell.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
+import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PushService.init();
   final session = SessionProvider();
   runApp(
     MultiProvider(
@@ -93,6 +95,7 @@ class _RootGateState extends State<RootGate> {
     if (_session.state == SessionState.loggedIn && !_started && _session.token != null) {
       _started = true;
       _bus.start(_session.token!);
+      PushService.register(_session.api); // notification-bar alerts even when the app is closed
     } else if (_session.state == SessionState.loggedOut && _started) {
       _started = false;
       _bus.reset();

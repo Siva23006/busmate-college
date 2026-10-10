@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 // A student's bus is assigned_bus_id if set, otherwise the first bus on their route.
 const SELECT = `
-  SELECT s.*, u.name, u.email, u.phone, u.is_active, u.notifications_enabled,
+  SELECT s.*, u.name, u.email, u.phone, u.is_active, u.notifications_enabled, u.alert_minutes,
          r.route_name, st.stop_name AS assigned_stop_name,
          COALESCE(s.assigned_bus_id, rb.id) AS bus_id,
          COALESCE(ab.bus_number, rb.bus_number) AS bus_number
@@ -43,7 +43,7 @@ async function findByUserId(userId) {
 /** Users who should hear about a bus: students on its route or assigned to it directly. */
 async function listForBus(busId, routeId) {
   const { rows } = await db.query(
-    `SELECT s.id AS student_id, s.assigned_stop_id, u.id AS user_id, u.fcm_token, u.notifications_enabled
+    `SELECT s.id AS student_id, s.assigned_stop_id, u.id AS user_id, u.fcm_token, u.notifications_enabled, u.alert_minutes
        FROM students s JOIN users u ON u.id = s.user_id
       WHERE u.is_active AND (s.assigned_bus_id = $1 OR (s.assigned_bus_id IS NULL AND s.assigned_route_id = $2))`,
     [busId, routeId],

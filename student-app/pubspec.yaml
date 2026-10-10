@@ -16,6 +16,9 @@ dependencies:
   connectivity_plus: ^6.1.0
   flutter_secure_storage: ^9.2.2
   google_maps_flutter: ^2.18.1
+  # Phone notifications when the app is closed (bus started / arriving / at your stop)
+  firebase_core:
+  firebase_messaging:
 dev_dependencies:
   flutter_test:
     sdk: flutter

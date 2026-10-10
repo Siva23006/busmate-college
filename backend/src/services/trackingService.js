@@ -155,14 +155,32 @@ async function processLocation(user, payload) {
       if (s.passed) continue;
       const waiting = recipients.filter((r) => String(r.assigned_stop_id) === String(s.stopId));
       if (!waiting.length) continue;
+      // "Bus is coming" alert: each student picks how many minutes before (default 10).
+      // A key per (stop, minutes) so a 15-min student and a 5-min student both get theirs once.
+      // `approach:<stop>` (loaded after a server restart) means this stop was already alerted.
+      const due = new Map();
+      for (const r of waiting) {
+        const minutes = Number(r.alert_minutes) || env.APPROACHING_MINUTES;
+        const key = `approach:${s.stopId}:${minutes}`;
+        if (s.etaSeconds > minutes * 60 || state.notified.has(key) || state.notified.has(`approach:${s.stopId}`)) continue;
+        if (!due.has(key)) due.set(key, []);
+        due.get(key).push(r);
+      }
+      for (const [key, group] of due) {
+        state.notified.add(key);
+        const mins = Math.max(1, Math.round(s.etaSeconds / 60));
+        notifyQuietly(group, {
+          title: `🚌 ${trip.bus_number} arriving in ~${mins} min`,
+          message: `Get ready at ${s.stopName}. Your bus is about ${mins} min away.`,
+          type: 'APPROACHING',
+          data: { busId: trip.bus_id, stopId: s.stopId },
+        });
+      }
+      if (due.size) await markStopEvent(trip.id, s.stopId, 'approaching_notified_at');
       if (s.remainingMeters <= 1000 && !state.notified.has(`near:${s.stopId}`)) {
         state.notified.add(`near:${s.stopId}`);
         await markStopEvent(trip.id, s.stopId, 'near_1km_notified_at');
-        notifyQuietly(waiting, { title: `${trip.bus_number} is close`, message: 'Your bus is approximately 1 km away.', type: 'NEAR_1KM', data: { busId: trip.bus_id, stopId: s.stopId } });
-      } else if (s.etaSeconds <= env.APPROACHING_MINUTES * 60 && !state.notified.has(`approach:${s.stopId}`)) {
-        state.notified.add(`approach:${s.stopId}`);
-        await markStopEvent(trip.id, s.stopId, 'approaching_notified_at');
-        notifyQuietly(waiting, { title: `${trip.bus_number} approaching`, message: `Your bus is approaching ${s.stopName}. Estimated ${Math.max(1, Math.round(s.etaSeconds / 60))} min.`, type: 'APPROACHING', data: { busId: trip.bus_id, stopId: s.stopId } });
+        notifyQuietly(waiting, { title: `${trip.bus_number} is close`, message: `Your bus is about 1 km from ${s.stopName}.`, type: 'NEAR_1KM', data: { busId: trip.bus_id, stopId: s.stopId } });
       }
     }
   }

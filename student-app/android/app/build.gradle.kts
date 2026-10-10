@@ -13,6 +13,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Phone notifications: Firebase reads android/app/google-services.json (download it from the
+// Firebase console; it is git-ignored). Without the file the app builds and runs without push.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.busmate.busmate_student"
     compileSdk = flutter.compileSdkVersion

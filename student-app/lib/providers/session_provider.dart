@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/api_client.dart';
+import '../services/push_service.dart';
 import '../models/models.dart';
 import '../services/token_storage.dart';
 
@@ -63,6 +64,7 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<void> logout({bool expired = false}) async {
+    await PushService.unregister();
     await _storage.clear();
     api.token = null;
     user = null;

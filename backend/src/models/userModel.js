@@ -29,7 +29,7 @@ async function create({ name, email, phone, password_hash, role }, client = db) 
 }
 
 async function update(id, data, client = db) {
-  const cols = ['name', 'email', 'phone', 'password_hash', 'is_active', 'fcm_token', 'notifications_enabled']
+  const cols = ['name', 'email', 'phone', 'password_hash', 'is_active', 'fcm_token', 'notifications_enabled', 'alert_minutes']
     .filter((f) => data[f] !== undefined);
   if (!cols.length) return;
   await client.query(
