@@ -1,10 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
-import { GraduationCap, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { FileSpreadsheet, GraduationCap, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { busApi, routeApi, studentApi } from "@/services/busmate";
 import { errorMessage } from "@/lib/api";
 import type { Student } from "@/types";
+import { StudentImportModal } from "@/components/StudentImport";
 import { Button, Card, EmptyState, ErrorBox, Field, Input, Modal, PageHeader, Select, Table, TableSkeleton, Td } from "@/components/ui";
 
 type Form = { name: string; email: string; phone: string; password: string; student_id: string; department: string; year: string; assigned_route_id: string; assigned_stop_id: string; assigned_bus_id: string };
@@ -18,6 +19,7 @@ export default function StudentsPage() {
   const buses = useAsync(() => busApi.list().then((r) => r.buses));
   const [editing, setEditing] = useState<Student | null>(null);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [form, setForm] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,10 @@ export default function StudentsPage() {
   return (
     <>
       <PageHeader title="Students" subtitle="Student accounts. Assign each student a route and stop so the Student app shows their bus and arrival time."
-        actions={<Button onClick={openNew}><Plus className="h-4 w-4" /> Add student</Button>} />
+        actions={<>
+          <Button variant="secondary" onClick={() => setImportOpen(true)}><FileSpreadsheet className="h-4 w-4" /> Import from Excel/CSV</Button>
+          <Button onClick={openNew}><Plus className="h-4 w-4" /> Add student</Button>
+        </>} />
       <Card className="mb-4 p-3">
         <form className="grid gap-2 sm:grid-cols-5" onSubmit={(e) => { e.preventDefault(); setApplied(filters); }}>
           <div className="relative sm:col-span-2">
@@ -101,6 +106,8 @@ export default function StudentsPage() {
           </Table>
         )}
       </Card>
+
+      <StudentImportModal open={importOpen} onClose={() => setImportOpen(false)} buses={buses.data ?? []} onImported={students.reload} />
 
       <Modal wide open={open} title={editing ? `Edit ${editing.name}` : "Add student"} onClose={() => setOpen(false)}
         footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>

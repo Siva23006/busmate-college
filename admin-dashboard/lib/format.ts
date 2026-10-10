@@ -75,7 +75,7 @@ export function etaMinutes(seconds: number | null | undefined): string {
 }
 
 const ALERT_TITLES: Record<string, string> = {
-  GPS_POOR: "Poor GPS accuracy", BUS_OFFLINE: "Bus offline", OVERSPEED: "Overspeed", ROUTE_DEVIATION: "Off route", SOS: "SOS / emergency",
+  GPS_POOR: "Poor GPS accuracy", BUS_OFFLINE: "Bus offline", OVERSPEED: "Overspeed", ROUTE_DEVIATION: "Off route", SOS: "SOS / emergency", BREAKDOWN: "Bus breakdown",
 };
 /** Plain-language alert title: "BUS_OFFLINE" -> "Bus offline". */
 export function alertTitle(type: string): string {

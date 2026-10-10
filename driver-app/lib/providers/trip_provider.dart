@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/api_client.dart';
@@ -121,6 +122,49 @@ class TripProvider extends ChangeNotifier {
     notifyListeners();
     loadHome();
     return done;
+  }
+
+  /// Emergency alert to the transport office. Works with or without a running trip.
+  /// [busId] is used when no trip is running (e.g. the bus selected on the home screen).
+  Future<String> sendSos({String? note, int? busId}) async {
+    final id = activeTrip?.busId ?? busId ?? activeBus?.id;
+    double? lat;
+    double? lng;
+    final fix = tracker.lastFix ?? tracker.lastKnown;
+    if (fix != null) {
+      lat = fix.latitude;
+      lng = fix.longitude;
+    } else {
+      // No trip running: the phone's last known spot is better than nothing (never blocks the SOS).
+      try {
+        final p = await Geolocator.getLastKnownPosition().timeout(const Duration(seconds: 3));
+        if (p != null) {
+          lat = p.latitude;
+          lng = p.longitude;
+        }
+      } catch (_) {/* no permission / no fix: send without a location */}
+    }
+    final text = note?.trim() ?? '';
+    final res = await api.post('/driver/sos', {
+      if (id != null) 'busId': id,
+      if (lat != null && lng != null) 'latitude': lat,
+      if (lat != null && lng != null) 'longitude': lng,
+      if (text.isNotEmpty) 'note': text,
+    });
+    return (res['message'] as String?) ?? 'SOS sent. The transport office has been alerted.';
+  }
+
+  /// Tell the students on this bus about a delay. kind: TRAFFIC | BREAKDOWN | LATE | OTHER.
+  Future<String> sendDelay({required String kind, int? minutes, String? note}) async {
+    final id = activeTrip?.busId ?? activeBus?.id;
+    final text = note?.trim() ?? '';
+    final res = await api.post('/driver/delay', {
+      if (id != null) 'busId': id,
+      'kind': kind,
+      if (minutes != null) 'minutes': minutes.clamp(1, 180),
+      if (text.isNotEmpty) 'note': text,
+    });
+    return (res['message'] as String?) ?? 'Sent to students.';
   }
 
   void dismissCompleted() {

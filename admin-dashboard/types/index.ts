@@ -12,6 +12,7 @@ export interface User {
   email: string | null;
   phone: string | null;
   role: Role;
+  created_at?: string;
 }
 
 export interface Bus {
@@ -236,4 +237,76 @@ export interface TrackData {
   };
   trips: TrackTrip[];
   days: { trip_date: string; trips: number }[];
+}
+
+/** A status message a driver sent for the running trip (GET /buses/:id/messages). */
+export type DriverMessageKind = "TRAFFIC" | "BREAKDOWN" | "LATE" | "OTHER";
+export interface DriverMessage {
+  id?: number;
+  kind: DriverMessageKind;
+  minutes: number | null;
+  message: string;
+  created_at: string;
+}
+
+/** Payload of the "bus:message" socket event. */
+export interface BusMessageEvent {
+  busId: number;
+  tripId: number;
+  kind: DriverMessageKind;
+  minutes: number | null;
+  text: string;
+  at: string;
+}
+
+/** Payload of the "admin:sos" socket event. */
+export interface SosEvent {
+  busId: number;
+  busNumber: string;
+  driverName: string;
+  driverPhone: string | null;
+  note: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  mapLink: string | null;
+  at: string;
+  alertId: number | null;
+}
+
+/** POST /students/bulk */
+export interface BulkStudentInput {
+  name: string;
+  student_id: string;
+  password: string;
+  email?: string;
+  phone?: string;
+  department?: string;
+  year?: number;
+  bus_number?: string;
+  stop_name?: string;
+}
+export interface BulkStudentResult {
+  added: number;
+  failed: number;
+  results: { row: number; studentId: string; ok: boolean; error?: string }[];
+}
+
+/** GET /reports/monthly?month=YYYY-MM */
+export interface MonthlyReportTotals {
+  trips: number; completed: number; distance_km: number; late_starts: number;
+  overspeed: number; offline: number; off_route: number; emergencies: number; delay_messages: number;
+  on_time_pct: number | null;
+}
+export interface MonthlyReportBus {
+  bus_id: number; bus_number: string;
+  trips: number; completed: number; morning_trips: number; evening_trips: number;
+  distance_km: number; avg_minutes: number | null; scheduled: number; late_starts: number; on_time_pct: number | null;
+  overspeed: number; offline: number; off_route: number; emergencies: number; delay_messages: number;
+}
+export interface MonthlyReport {
+  month: string;
+  timeZone: string;
+  lateAfterMinutes: number;
+  totals: MonthlyReportTotals;
+  buses: MonthlyReportBus[];
 }

@@ -8,6 +8,7 @@ import '../utils/format.dart';
 import '../utils/status.dart';
 import '../widgets/bus_map.dart';
 import '../widgets/common.dart';
+import '../widgets/driver_message_banner.dart';
 import '../widgets/journey.dart';
 import 'live_map_screen.dart';
 import 'main_shell.dart';
@@ -96,6 +97,7 @@ class HomeScreen extends StatelessWidget {
     void open(Widget page) => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
 
     return [
+      if (p.driverMessage != null) FadeSlideIn(child: DriverMessageBanner(p: p)),
       // Bus + route + live
       FadeSlideIn(
         key: const ValueKey('bus'),

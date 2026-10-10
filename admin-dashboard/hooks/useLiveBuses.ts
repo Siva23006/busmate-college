@@ -5,7 +5,7 @@ import { io, type Socket } from "socket.io-client";
 import { API_URL, DELAYED_AFTER_MS, OFFLINE_AFTER_MS } from "@/lib/config";
 import { tokenStore } from "@/lib/api";
 import { busApi } from "@/services/busmate";
-import type { Alert, Bus, BusStatusEvent, Eta, LiveLocation } from "@/types";
+import type { Alert, Bus, BusMessageEvent, BusStatusEvent, DriverMessage, Eta, LiveLocation } from "@/types";
 
 export type Connection = "connecting" | "online" | "offline";
 export type Freshness = "LIVE" | "DELAYED" | "OFFLINE" | "IDLE";
@@ -16,6 +16,8 @@ export interface LiveBus extends Bus {
   lastEvent: BusStatusEvent | null;
   freshness: Freshness;
   isMoving: boolean;
+  /** Latest driver message received live (bus:message) for the running trip. */
+  message: DriverMessage | null;
 }
 
 function freshnessOf(bus: Bus, live: LiveLocation | null, now: number): Freshness {
@@ -33,6 +35,7 @@ export function useLiveBuses(onAlert?: (a: Alert) => void) {
   const [buses, setBuses] = useState<Bus[]>([]);
   const [live, setLive] = useState<Record<number, LiveLocation>>({});
   const [events, setEvents] = useState<Record<number, BusStatusEvent>>({});
+  const [messages, setMessages] = useState<Record<number, BusMessageEvent>>({});
   const [connection, setConnection] = useState<Connection>("connecting");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +75,7 @@ export function useLiveBuses(onAlert?: (a: Alert) => void) {
       refresh();
     });
     socket.on("bus:updated", refresh);
+    socket.on("bus:message", (m: BusMessageEvent) => setMessages((prev) => ({ ...prev, [m.busId]: m })));
     socket.on("admin:alert", (a: Alert) => onAlertRef.current?.(a));
     const tick = setInterval(() => setNow(Date.now()), 5000);
     return () => { clearInterval(tick); socket.close(); };
@@ -80,6 +84,9 @@ export function useLiveBuses(onAlert?: (a: Alert) => void) {
   const merged: LiveBus[] = useMemo(() => buses.map((b) => {
     const l = live[b.id] && b.active_trip_id && live[b.id].tripId === b.active_trip_id ? live[b.id] : null;
     const speedKmh = l?.speedKmh ?? (b.speed != null ? b.speed * 3.6 : null);
+    const m = messages[b.id];
+    const message: DriverMessage | null = m && b.active_trip_id && m.tripId === b.active_trip_id
+      ? { kind: m.kind, minutes: m.minutes, message: m.text, created_at: m.at } : null;
     return {
       ...b,
       latitude: l?.latitude ?? b.latitude,
@@ -93,8 +100,9 @@ export function useLiveBuses(onAlert?: (a: Alert) => void) {
       lastEvent: events[b.id] ?? null,
       freshness: freshnessOf(b, l, now),
       isMoving: speedKmh != null && speedKmh >= 5,
+      message,
     };
-  }), [buses, live, events, now]);
+  }), [buses, live, events, messages, now]);
 
   return { buses: merged, connection, loading, error, refresh };
 }

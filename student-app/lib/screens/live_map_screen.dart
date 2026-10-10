@@ -7,6 +7,7 @@ import '../utils/status.dart';
 import '../widgets/app_bar.dart';
 import '../widgets/bus_map.dart';
 import '../widgets/common.dart';
+import '../widgets/driver_message_banner.dart';
 import '../widgets/journey.dart';
 
 /// Full-screen live map with a compact arrival card.
@@ -67,6 +68,7 @@ class LiveMapScreen extends StatelessWidget {
                 boxShadow: pal.floatShadow,
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
+                DriverMessageBanner(p: p),
                 Padding(padding: const EdgeInsets.fromLTRB(4, 2, 4, 10), child: RouteHeader(p: p)),
                 BigEtaCard(p: p),
               ]),

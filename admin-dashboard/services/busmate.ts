@@ -1,6 +1,8 @@
 // Typed wrappers around the BusMate REST API.
 import { api } from "@/lib/api";
-import type { Alert, Bus, DashboardStats, Driver, Route, Stop, Student, Trip, User, Eta, TrackData } from "@/types";
+import type {
+  Alert, Bus, BulkStudentInput, BulkStudentResult, DashboardStats, Driver, DriverMessage, MonthlyReport, Route, Stop, Student, Trip, User, Eta, TrackData,
+} from "@/types";
 
 type Body = Record<string, unknown>;
 /** Result of rebuilding a route's road line (OSRM). ok=false: straight lines / unchanged, see message. */
@@ -24,6 +26,8 @@ export const busApi = {
   remove: (id: number) => api<void>(`/buses/${id}`, { method: "DELETE" }),
   eta: (id: number) => api<{ eta: Eta | null }>(`/buses/${id}/eta`),
   track: (id: number, date?: string) => api<TrackData>(`/buses/${id}/track${date ? `?date=${date}` : ""}`),
+  /** Driver messages for the bus's running trip, newest first. */
+  messages: (id: number) => api<{ messages: DriverMessage[] }>(`/buses/${id}/messages`),
 };
 
 export const routeApi = {
@@ -57,6 +61,19 @@ export const studentApi = {
   create: (body: Body) => api<{ student: Student }>("/students", { method: "POST", body }),
   update: (id: number, body: Body) => api<{ student: Student }>(`/students/${id}`, { method: "PUT", body }),
   remove: (id: number) => api<void>(`/students/${id}`, { method: "DELETE" }),
+  /** Up to 1000 students per call. */
+  bulk: (students: BulkStudentInput[]) =>
+    api<BulkStudentResult>("/students/bulk", { method: "POST", body: { students }, timeoutMs: 180000 }),
+};
+
+export const reportApi = {
+  monthly: (month: string) => api<MonthlyReport>(`/reports/monthly?month=${encodeURIComponent(month)}`),
+};
+
+/** The signed-in admin's own account. */
+export const meApi = {
+  get: () => api<{ user: User }>("/me"),
+  update: (body: { name?: string; email?: string; phone?: string }) => api<{ user: User }>("/me", { method: "PUT", body }),
 };
 
 export interface TripPoint { latitude: number; longitude: number; accuracy: number | null; speed: number | null; timestamp: string; is_reliable: boolean }

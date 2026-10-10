@@ -1,8 +1,8 @@
 "use client";
-// Alerts: only the problems an admin must act on (overspeed, bus offline, off route, SOS),
+// Alerts: only the problems an admin must act on (SOS, breakdown, overspeed, bus offline, off route),
 // grouped day by day, plus the speed-limit settings used for overspeed alerts.
 import { useMemo, useState } from "react";
-import { BellOff, CheckCheck, CheckCircle2, Gauge, MapPinOff, Siren, WifiOff } from "lucide-react";
+import { BellOff, CheckCheck, CheckCircle2, ExternalLink, Gauge, MapPinOff, Siren, WifiOff, Wrench } from "lucide-react";
 import { useAsync } from "@/hooks/useAsync";
 import { useLiveBuses } from "@/hooks/useLiveBuses";
 import { alertApi, type SpeedSettings } from "@/services/busmate";
@@ -11,9 +11,22 @@ import { alertTitle, clock, dateTime, dayLabel, localDate } from "@/lib/format";
 import type { Alert } from "@/types";
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, Input, Modal, PageHeader, Segmented, TableSkeleton, cn, type Tone } from "@/components/ui";
 
-type Kind = "ALL" | "OVERSPEED" | "BUS_OFFLINE" | "ROUTE_DEVIATION";
-const KIND_ICON: Record<string, typeof Gauge> = { OVERSPEED: Gauge, BUS_OFFLINE: WifiOff, ROUTE_DEVIATION: MapPinOff, SOS: Siren };
-const KIND_TONE: Record<string, Tone> = { OVERSPEED: "red", BUS_OFFLINE: "amber", ROUTE_DEVIATION: "violet", SOS: "red" };
+type Kind = "ALL" | "SOS" | "BREAKDOWN" | "OVERSPEED" | "BUS_OFFLINE" | "ROUTE_DEVIATION";
+const KIND_ICON: Record<string, typeof Gauge> = { OVERSPEED: Gauge, BUS_OFFLINE: WifiOff, ROUTE_DEVIATION: MapPinOff, SOS: Siren, BREAKDOWN: Wrench };
+const KIND_TONE: Record<string, Tone> = { OVERSPEED: "red", BUS_OFFLINE: "amber", ROUTE_DEVIATION: "violet", SOS: "red", BREAKDOWN: "red" };
+/** Emergencies get a red row, not just a red icon. */
+const EMERGENCY = new Set(["SOS", "BREAKDOWN"]);
+
+const MAP_LINK = /https:\/\/(?:www\.)?(?:maps\.google\.[a-z.]+|google\.[a-z.]+\/maps|maps\.app\.goo\.gl)\S*/i;
+
+/** Split "… Location: https://maps.google.com/?q=…" into readable text + the map link. */
+function splitMapLink(message: string): { text: string; link: string | null } {
+  const m = message.match(MAP_LINK);
+  if (!m) return { text: message, link: null };
+  const link = m[0].replace(/[.,;)]+$/, "");
+  const text = message.replace(m[0], "").replace(/\s*Location:\s*$/i, "").replace(/\s*Location:\s*\./i, ".").trim();
+  return { text, link };
+}
 
 export default function AlertsPage() {
   const [resolved, setResolved] = useState(false);
@@ -53,7 +66,7 @@ export default function AlertsPage() {
     <>
       <PageHeader
         title="Alerts"
-        subtitle="Only problems you need to act on: overspeed, bus offline and off route. Resolve an alert once it is handled."
+        subtitle="Only problems you need to act on: driver SOS, breakdowns, overspeed, bus offline and off route. Resolve an alert once it is handled."
         actions={<>
           <Button variant="secondary" onClick={() => setSpeedOpen(true)}><Gauge className="h-4 w-4" /> Speed limits</Button>
           {!resolved && all.length > 0 && <Button variant="secondary" onClick={resolveAll}><CheckCheck className="h-4 w-4" /> Resolve all</Button>}
@@ -64,6 +77,8 @@ export default function AlertsPage() {
       <div className="mb-4">
         <Segmented<Kind> value={kind} onChange={setKind} size="sm" options={[
           { value: "ALL", label: "All", count: all.length },
+          { value: "SOS", label: "SOS", count: counts.SOS ?? 0 },
+          { value: "BREAKDOWN", label: "Breakdown", count: counts.BREAKDOWN ?? 0 },
           { value: "OVERSPEED", label: "Overspeed", count: counts.OVERSPEED ?? 0 },
           { value: "BUS_OFFLINE", label: "Bus offline", count: counts.BUS_OFFLINE ?? 0 },
           { value: "ROUTE_DEVIATION", label: "Off route", count: counts.ROUTE_DEVIATION ?? 0 },
@@ -90,19 +105,28 @@ export default function AlertsPage() {
                 {items.map((a) => {
                   const Icon = KIND_ICON[a.type] ?? Siren;
                   const tone = KIND_TONE[a.type] ?? "slate";
+                  const emergency = EMERGENCY.has(a.type);
+                  const { text, link } = splitMapLink(a.message);
                   return (
-                    <div key={a.id} className="flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)]">
+                    <div key={a.id} className={cn("flex items-start gap-3 px-4 py-3",
+                      emergency && !a.resolved ? "border-l-4 border-l-red-600 bg-red-50/70 hover:bg-red-50 dark:bg-red-500/10 dark:hover:bg-red-500/15" : "hover:bg-[var(--surface-2)]")}>
                       <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-                        tone === "red" ? "bg-red-500/10 text-red-600" : tone === "amber" ? "bg-amber-500/15 text-amber-600" : "bg-violet-500/10 text-violet-600")}>
+                        emergency ? "bg-red-600 text-white" : tone === "red" ? "bg-red-500/10 text-red-600" : tone === "amber" ? "bg-amber-500/15 text-amber-600" : "bg-violet-500/10 text-violet-600")}>
                         <Icon className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[13px] font-semibold">{alertTitle(a.type)}</span>
+                          <span className={cn("text-[13px] font-semibold", emergency && "text-red-700 dark:text-red-300")}>{alertTitle(a.type)}</span>
                           {a.bus_number && <Badge tone="slate">{a.bus_number}</Badge>}
                           {a.severity === "CRITICAL" && !a.resolved && <Badge tone="red" dot pulse>Critical</Badge>}
                         </div>
-                        <p className="text-muted mt-0.5 text-[13px]">{a.message}</p>
+                        <p className="text-muted mt-0.5 text-[13px]">{text}</p>
+                        {link && (
+                          <a href={link} target="_blank" rel="noopener noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-red-700 underline-offset-2 hover:underline dark:text-red-300">
+                            <ExternalLink className="h-3.5 w-3.5" /> Open location
+                          </a>
+                        )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
                         <span className="text-muted text-xs" title={dateTime(a.created_at)}>{clock(a.created_at)}</span>

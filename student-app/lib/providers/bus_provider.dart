@@ -26,6 +26,12 @@ class BusProvider extends ChangeNotifier {
 
   /// Alert me this many minutes before the bus reaches my stop.
   int alertMinutes = 10;
+
+  /// Ring the "bus arriving" alert like an alarm clock (full screen, loud) instead of a normal notification.
+  bool alarmStyle = true;
+
+  /// Latest message from the driver on this trip (traffic, breakdown, late...). Null when none.
+  DriverMessage? driverMessage;
   BusInfo? bus;
   RouteInfo? route;
   bool loading = false;
@@ -138,6 +144,7 @@ class BusProvider extends ChangeNotifier {
       myStopName = s['stopName'] as String?;
       notificationsEnabled = s['notificationsEnabled'] != false;
       if (s['alertMinutes'] is num) alertMinutes = (s['alertMinutes'] as num).toInt();
+      alarmStyle = (res['alarmStyle'] ?? s['alarmStyle']) != false;
       bus = res['bus'] is Map<String, dynamic> ? BusInfo.fromJson(res['bus'] as Map<String, dynamic>) : null;
       route = res['route'] is Map<String, dynamic> ? RouteInfo.fromJson(res['route'] as Map<String, dynamic>) : null;
       eta = Eta.fromJson(res['eta']) ?? eta;
@@ -148,6 +155,11 @@ class BusProvider extends ChangeNotifier {
         if (last != null && (location == null || last.timestamp.isAfter(location!.timestamp))) location = last;
       }
       _subscribe();
+      if (bus?.activeTripId != null) {
+        _loadDriverMessage();
+      } else {
+        driverMessage = null;
+      }
     } on ApiException catch (e) {
       error = e.message;
     } finally {
@@ -203,9 +215,15 @@ class BusProvider extends ChangeNotifier {
       lastEventAt = DateTime.now();
       notifyListeners();
     });
+    socket.on('bus:message', (data) {
+      if (data is! Map || data['busId'] != bus?.id) return;
+      driverMessage = DriverMessage.fromJson(Map<String, dynamic>.from(data));
+      notifyListeners();
+    });
     socket.on('trip:started', (data) {
       if (data is Map && data['busId'] == bus?.id) {
         tripCompleted = false;
+        driverMessage = null;
         location = null;
         eta = null;
         tripStart = null;
@@ -216,6 +234,7 @@ class BusProvider extends ChangeNotifier {
     socket.on('trip:completed', (data) {
       if (data is Map && data['busId'] == bus?.id) {
         tripCompleted = true;
+        driverMessage = null;
         _direction = data['direction'] as String? ?? _direction;
         eta = null;
         load();
@@ -360,6 +379,44 @@ class BusProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> setAlarmStyle(bool on) async {
+    final old = alarmStyle;
+    alarmStyle = on;
+    notifyListeners();
+    try {
+      await api.put('/me/notifications', {'alarmStyle': on});
+    } on ApiException {
+      alarmStyle = old;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Hides the driver's message banner (until the driver sends a new one).
+  void dismissDriverMessage() {
+    driverMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> _loadDriverMessage() async {
+    final id = bus?.id;
+    if (id == null) return;
+    try {
+      final res = await api.get('/buses/$id/messages');
+      final list = (res['messages'] as List?) ?? const [];
+      if (list.isNotEmpty && list.first is Map) {
+        final m = DriverMessage.fromJson(Map<String, dynamic>.from(list.first as Map));
+        // Older than 2 hours is no longer useful.
+        if (DateTime.now().difference(m.at) < const Duration(hours: 2)) {
+          driverMessage = m;
+          notifyListeners();
+        }
+      }
+    } on ApiException {
+      // optional
+    }
+  }
+
   Future<List<BusInfo>> listBuses() async {
     final res = await api.get('/student/buses');
     return ((res['buses'] as List?) ?? []).map((b) => BusInfo.fromJson(b as Map<String, dynamic>)).toList();
@@ -392,6 +449,7 @@ class BusProvider extends ChangeNotifier {
     route = null;
     location = null;
     eta = null;
+    driverMessage = null;
     notifications.clear();
     notifyListeners();
   }
@@ -402,4 +460,20 @@ class BusProvider extends ChangeNotifier {
     _incoming.close();
     super.dispose();
   }
+}
+
+/// A message the driver sent to everyone on the bus.
+class DriverMessage {
+  DriverMessage({required this.kind, required this.text, this.minutes, required this.at});
+  final String kind; // TRAFFIC, BREAKDOWN, LATE, OTHER
+  final String text;
+  final int? minutes;
+  final DateTime at;
+
+  factory DriverMessage.fromJson(Map<String, dynamic> j) => DriverMessage(
+        kind: (j['kind'] as String?) ?? 'OTHER',
+        text: (j['text'] ?? j['message'] ?? '') as String,
+        minutes: j['minutes'] is num ? (j['minutes'] as num).toInt() : null,
+        at: DateTime.tryParse('${j['at'] ?? j['created_at']}')?.toLocal() ?? DateTime.now(),
+      );
 }

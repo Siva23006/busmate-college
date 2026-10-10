@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Full-screen "bus arriving" alarm on the lock screen -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- usesCleartextTraffic lets the app talk to http://<laptop-ip>:4000 during development.
          For production use an https:// backend and you can remove it. -->
@@ -30,6 +33,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Full-screen "bus arriving" alarm (BusAlarm.kt) -->
+        <activity
+            android:name=".BusAlarmActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+        <receiver
+            android:name=".BusAlarmReceiver"
+            android:exported="true"
+            android:permission="com.google.android.c2dm.permission.SEND">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".BusAlarmDismissReceiver" android:exported="false" />
         <!-- Google Maps key is injected from android/local.properties (MAPS_API_KEY=...), never committed -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"

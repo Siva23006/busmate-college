@@ -4,7 +4,7 @@ const realtime = require('./realtime');
 
 const THROTTLE_MS = 5 * 60 * 1000;
 // Shown to the admin. (Weak GPS is normal in traffic/tunnels and is no longer an alert.)
-const IMPORTANT_TYPES = ['OVERSPEED', 'BUS_OFFLINE', 'ROUTE_DEVIATION', 'SOS'];
+const IMPORTANT_TYPES = ['SOS', 'BREAKDOWN', 'OVERSPEED', 'BUS_OFFLINE', 'ROUTE_DEVIATION'];
 const lastRaised = new Map(); // `${busId}:${type}` -> time
 
 async function raise({ busId = null, tripId = null, type, severity = 'WARNING', message, throttle = true }) {

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { API_URL, GOOGLE_MAPS_API_KEY } from "@/lib/config";
@@ -30,7 +31,10 @@ export default function SettingsPage() {
           <div className="flex justify-between"><span className="text-muted">Name</span><span>{user?.name}</span></div>
           <div className="flex justify-between"><span className="text-muted">Email</span><span>{user?.email}</span></div>
           <div className="flex items-center justify-between"><span className="text-muted">Theme</span><ThemeToggle /></div>
-          <Button variant="danger" onClick={logout}>Logout</Button>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/profile" className="inline-flex items-center rounded-lg border border-[var(--border)] px-3.5 py-2 text-[13px] font-semibold transition hover:bg-[var(--surface-2)]">Edit my profile</Link>
+            <Button variant="danger" onClick={logout}>Logout</Button>
+          </div>
         </Card>
         <Card delay={2} className="space-y-3 p-5 text-[13px]">
           <h3 className="text-[15px] font-semibold">Change password</h3>

@@ -10,6 +10,10 @@ interface AuthState {
   ready: boolean;
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Re-load the signed-in user from the server (e.g. after editing the profile). */
+  refresh: () => Promise<void>;
+  /** Replace the cached user with fresh data the caller already has (e.g. the PUT /me response). */
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -46,7 +50,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user);
   }, []);
 
-  return <AuthContext.Provider value={{ user, ready, login, logout }}>{children}</AuthContext.Provider>;
+  const refresh = useCallback(async () => {
+    const { user } = await authApi.me();
+    if (user.role === "ADMIN") setUser(user);
+  }, []);
+
+  const updateUser = useCallback((next: User) => {
+    setUser((cur) => (cur ? { ...cur, ...next } : next));
+  }, []);
+
+  return <AuthContext.Provider value={{ user, ready, login, logout, refresh, updateUser }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

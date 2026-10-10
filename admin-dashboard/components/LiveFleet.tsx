@@ -12,6 +12,7 @@ import type { Route } from "@/types";
 import { BusMarker, FitBounds, MapView, PanTo, Polyline, StartMarker, StopMarker, routeLine, stopsForDirection, type LatLng } from "./MapView";
 import { Badge, DemoBadge, EmptyState, LiveDot, Segmented, Skeleton, cn, stagger, type Tone } from "./ui";
 import { clock, etaMinutes, km, timeAgo, tripEnds, tripTitle } from "@/lib/format";
+import { DriverMessageCard, useDriverMessage } from "./DriverMessageCard";
 
 const FRESH: Record<LiveBus["freshness"], { tone: Tone; label: string }> = {
   LIVE: { tone: "green", label: "Online" },
@@ -234,6 +235,7 @@ function BusDetail({ bus, route, startAddress, hasStart, onBack }: { bus: LiveBu
   const m = movementLabel(bus);
   const f = FRESH[bus.freshness];
   const eta = bus.eta;
+  const driverMsg = useDriverMessage(bus);
   return (
     <div className="anim-fade-in flex h-full flex-col">
       <div className="border-b border-[var(--border)] px-4 py-3">
@@ -249,6 +251,7 @@ function BusDetail({ bus, route, startAddress, hasStart, onBack }: { bus: LiveBu
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+        <DriverMessageCard message={driverMsg} className="mb-2 mt-1" />
         <Row icon={UserRound} label="Driver">{bus.driver_name ?? "-"}</Row>
         <Row icon={RouteIcon} label="Route">{bus.route_name ?? "-"}</Row>
         <Row icon={ArrowLeftRight} label="Run">{bus.active_trip_id ? `${ends.from} → ${ends.to}` : "-"}</Row>

@@ -35,10 +35,12 @@ class PushService {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(alert: true, badge: true, sound: true);
       final token = await messaging.getToken();
-      if (token != null) await api.put('/me/fcm-token', {'token': token});
+      // alarm: this app can ring a full-screen "bus arriving" alarm (Android).
+      final alarm = defaultTargetPlatform == TargetPlatform.android;
+      if (token != null) await api.put('/me/fcm-token', {'token': token, 'alarm': alarm});
       await _refreshSub?.cancel();
       _refreshSub = messaging.onTokenRefresh.listen((t) {
-        api.put('/me/fcm-token', {'token': t}).catchError((Object _) => <String, dynamic>{});
+        api.put('/me/fcm-token', {'token': t, 'alarm': alarm}).catchError((Object _) => <String, dynamic>{});
       });
     } catch (e) {
       debugPrint('[push] register failed: $e');

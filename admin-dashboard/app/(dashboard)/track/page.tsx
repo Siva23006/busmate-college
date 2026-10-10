@@ -17,6 +17,7 @@ import {
   BusMarker, FitBounds, MapView, PanTo, Polyline, StartMarker, StopMarker, routeLine, stopsForDirection, type LatLng,
 } from "@/components/MapView";
 import { movementLabel } from "@/components/LiveFleet";
+import { DriverMessageCard, useDriverMessage } from "@/components/DriverMessageCard";
 import { Badge, Button, Card, DemoBadge, EmptyState, ErrorBox, Input, LiveDot, PageHeader, RouteDash, Skeleton, cn, type Tone } from "@/components/ui";
 
 const DIR_TONE: Record<string, Tone> = { TO_COLLEGE: "blue", FROM_COLLEGE: "violet" };
@@ -285,6 +286,7 @@ function LivePanel({ data, live, direction, startAddress, hasStart }: { data: Tr
   const [from, to] = routeEnds({ direction }, data);
   const m = live ? movementLabel(live) : null;
   const speed = live?.speed ?? data.live?.speed ?? null;
+  const driverMsg = useDriverMessage(live);
 
   if (!live?.active_trip_id) {
     const last = data.trips[data.trips.length - 1];
@@ -328,6 +330,7 @@ function LivePanel({ data, live, direction, startAddress, hasStart }: { data: Tr
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <DriverMessageCard message={driverMsg} className="mb-3" />
         {eta?.nextStop && (
           <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
             <div className="text-[11px] font-semibold uppercase tracking-wider opacity-80">Next stop · estimated arrival</div>

@@ -6,6 +6,7 @@ import '../core/config.dart';
 import '../models/models.dart';
 import '../providers/bus_provider.dart';
 import '../providers/session_provider.dart';
+import '../services/alarm_bridge.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import '../utils/format.dart';
@@ -198,6 +199,10 @@ class SettingsScreen extends StatelessWidget {
                     ]),
                   ]),
                 ),
+                if (AlarmBridge.supported) ...[
+                  divider(),
+                  const _AlarmSettings(),
+                ],
               ],
             ]),
           ),
@@ -257,5 +262,103 @@ class SettingsScreen extends StatelessWidget {
         const CreditFooter(),
       ]),
     );
+  }
+}
+
+/// "Ring like an alarm" switch, the Android full-screen permission, and a test button.
+class _AlarmSettings extends StatefulWidget {
+  const _AlarmSettings();
+
+  @override
+  State<_AlarmSettings> createState() => _AlarmSettingsState();
+}
+
+class _AlarmSettingsState extends State<_AlarmSettings> with WidgetsBindingObserver {
+  bool _canFullScreen = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Coming back from Android settings: check again.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await AlarmBridge.canFullScreen();
+    if (mounted) setState(() => _canFullScreen = ok);
+  }
+
+  Future<void> _test() async {
+    final ok = await AlarmBridge.test(delaySeconds: 5);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'Test alarm rings in 5 seconds. Lock your phone now to see it full screen.' : 'Could not start the test alarm.'),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.watch<BusProvider>();
+    final pal = Palette.of(context);
+    return Column(children: [
+      SwitchListTile(
+        secondary: const IconTile(icon: Icons.alarm_on_rounded, color: BrandColors.red),
+        title: const Text('Ring like an alarm'),
+        subtitle: const Text('Full screen with alarm sound until you tap I\'M READY'),
+        value: p.alarmStyle,
+        onChanged: (v) async {
+          try {
+            await p.setAlarmStyle(v);
+          } on ApiException catch (e) {
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+          }
+        },
+      ),
+      if (p.alarmStyle && !_canFullScreen)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: BrandColors.amber.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: BrandColors.amber.withValues(alpha: 0.4)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.warning_amber_rounded, color: BrandColors.amber, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Allow full-screen alerts so the alarm can show on the lock screen.',
+                    style: TextStyle(color: pal.text, fontSize: 12.5)),
+              ),
+              TextButton(onPressed: AlarmBridge.openFullScreenSettings, child: const Text('Allow')),
+            ]),
+          ),
+        ),
+      if (p.alarmStyle)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _test,
+              icon: const Icon(Icons.play_circle_outline_rounded, size: 18),
+              label: const Text('Test alarm'),
+            ),
+          ),
+        ),
+    ]);
   }
 }

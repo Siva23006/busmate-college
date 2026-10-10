@@ -125,15 +125,47 @@ const location = z.object({
 });
 
 // ---------- Me / settings ----------
-const fcmToken = z.object({ token: z.string().min(10).max(4096) });
+const fcmToken = z.object({ token: z.string().min(10).max(4096), alarm: z.boolean().optional() });
 const notificationPrefs = z.object({
   enabled: z.boolean().optional(),
   alertMinutes: z.coerce.number().int().min(1).max(60).optional(), // alert this many minutes before my stop
-}).refine((v) => v.enabled !== undefined || v.alertMinutes !== undefined, { message: 'Nothing to update' });
+  alarmStyle: z.boolean().optional(), // ring like an alarm (full screen) instead of a normal notification
+}).refine((v) => v.enabled !== undefined || v.alertMinutes !== undefined || v.alarmStyle !== undefined, { message: 'Nothing to update' });
 const speedLimit = z.coerce.number().int().min(10).max(150);
 const alertSettings = z.object({
   defaultSpeedLimitKmh: speedLimit.optional(),
   buses: z.array(z.object({ id, speedLimitKmh: speedLimit.nullable().optional() })).max(500).optional(),
+});
+const sos = z.object({
+  busId: id.optional(),
+  latitude: lat.optional(),
+  longitude: lng.optional(),
+  note: optText(300),
+});
+const driverDelay = z.object({
+  busId: id.optional(),
+  kind: z.enum(['TRAFFIC', 'BREAKDOWN', 'LATE', 'OTHER']),
+  minutes: z.coerce.number().int().min(1).max(180).optional().nullable(),
+  note: optText(300),
+});
+const bulkStudents = z.object({
+  students: z.array(z.object({
+    name: text(),
+    student_id: text(50),
+    password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+    email: z.string().trim().email().max(200).optional().nullable().or(z.literal('')),
+    phone: optText(30),
+    department: optText(100),
+    year: z.coerce.number().int().min(1).max(10).optional().nullable(),
+    bus_number: optText(50),
+    stop_name: optText(100),
+  })).min(1).max(1000),
+});
+const reportQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM') });
+const updateMe = z.object({
+  name: text().optional(),
+  email: z.string().trim().email().max(200).optional().or(z.literal('')),
+  phone: z.string().trim().max(30).optional(),
 });
 const chooseStop = z.object({ stopId: id });
 const chooseBus = z.object({ busId: id });
@@ -147,5 +179,5 @@ module.exports = {
   routeCreate, routeUpdate, stopCreate, stopUpdate, stopReorder, stopsQuery,
   driverCreate, driverUpdate, studentCreate, studentUpdate, studentsQuery,
   tripStart, tripEnd, tripsQuery, location,
-  fcmToken, notificationPrefs, alertSettings, chooseStop, chooseBus,
+  fcmToken, notificationPrefs, alertSettings, sos, driverDelay, bulkStudents, reportQuery, updateMe, chooseStop, chooseBus,
 };

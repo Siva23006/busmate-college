@@ -120,14 +120,15 @@ async function me(req, res) {
 }
 
 async function setFcmToken(req, res) {
-  await userModel.update(req.user.id, { fcm_token: req.valid.body.token });
+  // alarm: this app version can show the full-screen "bus arriving" alarm.
+  await userModel.update(req.user.id, { fcm_token: req.valid.body.token, alarm_capable: req.valid.body.alarm === true });
   res.json({ ok: true });
 }
 
 async function setNotificationPrefs(req, res) {
-  const { enabled, alertMinutes } = req.valid.body;
-  await userModel.update(req.user.id, { notifications_enabled: enabled, alert_minutes: alertMinutes });
-  res.json({ ok: true, enabled, alertMinutes });
+  const { enabled, alertMinutes, alarmStyle } = req.valid.body;
+  await userModel.update(req.user.id, { notifications_enabled: enabled, alert_minutes: alertMinutes, alarm_style: alarmStyle });
+  res.json({ ok: true, enabled, alertMinutes, alarmStyle });
 }
 
 module.exports = { login, forgotPassword, changePassword, register, me, setFcmToken, setNotificationPrefs, profileFor };

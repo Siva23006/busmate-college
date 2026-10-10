@@ -14,13 +14,25 @@ function initFirebase() {
   }
 }
 
-async function sendPush(tokens, title, message, data) {
+async function sendPush(tokens, title, message, data, { alarm = false } = {}) {
   if (!messaging || !tokens.length) return;
+  const strData = Object.fromEntries(Object.entries(data || {}).map(([k, v]) => [k, String(v)]));
   try {
+    if (alarm) {
+      // Data-only message: the student app (BusAlarmService.kt) shows a full-screen ringing alarm
+      // even when the app is closed or the phone is locked.
+      const res = await messaging.sendEachForMulticast({
+        tokens,
+        data: { ...strData, alarm: '1', title, body: message },
+        android: { priority: 'high', ttl: 30 * 60 * 1000 },
+      });
+      await dropDeadTokens(res, tokens);
+      return;
+    }
     const res = await messaging.sendEachForMulticast({
       tokens,
       notification: { title, body: message },
-      data: Object.fromEntries(Object.entries(data || {}).map(([k, v]) => [k, String(v)])),
+      data: strData,
       // "Bus is near / at your stop" uses the loud arrival channel; other alerts the normal one.
       // Both channels are created by the student app (MainActivity.kt).
       android: {
@@ -33,16 +45,20 @@ async function sendPush(tokens, title, message, data) {
         },
       },
     });
-    // Remove tokens Firebase says are dead so we stop sending to them.
-    const dead = [];
-    res.responses.forEach((r, i) => {
-      const code = r.error && r.error.code;
-      if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') dead.push(tokens[i]);
-    });
-    if (dead.length) await db.query('UPDATE users SET fcm_token = NULL WHERE fcm_token = ANY($1)', [dead]);
+    await dropDeadTokens(res, tokens);
   } catch (err) {
     console.warn('[fcm] send failed:', err.message);
   }
+}
+
+/** Remove tokens Firebase says are dead so we stop sending to them. */
+async function dropDeadTokens(res, tokens) {
+  const dead = [];
+  res.responses.forEach((r, i) => {
+    const code = r.error && r.error.code;
+    if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') dead.push(tokens[i]);
+  });
+  if (dead.length) await db.query('UPDATE users SET fcm_token = NULL WHERE fcm_token = ANY($1)', [dead]);
 }
 
 /**
@@ -61,8 +77,17 @@ async function notify(recipients, { title, message, type, data }) {
   for (const n of rows) {
     if (enabled.has(String(n.user_id))) realtime.toUser(n.user_id, 'notification:new', { ...n, data: data || {} });
   }
-  const tokens = recipients.filter((r) => r.notifications_enabled && r.fcm_token).map((r) => r.fcm_token);
-  await sendPush(tokens, title, message, { type, ...(data || {}) });
+  const withPush = recipients.filter((r) => r.notifications_enabled && r.fcm_token);
+  const payload = { type, ...(data || {}) };
+  if (type === 'APPROACHING') {
+    // "Bus arriving in ~N min": full-screen alarm for students whose app supports it and who want it.
+    const alarm = withPush.filter((r) => r.alarm_capable && r.alarm_style !== false);
+    const normal = withPush.filter((r) => !(r.alarm_capable && r.alarm_style !== false));
+    await sendPush(alarm.map((r) => r.fcm_token), title, message, payload, { alarm: true });
+    await sendPush(normal.map((r) => r.fcm_token), title, message, payload);
+    return;
+  }
+  await sendPush(withPush.map((r) => r.fcm_token), title, message, payload);
 }
 
 module.exports = { initFirebase, notify };

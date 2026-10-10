@@ -13,6 +13,7 @@ import '../utils/accuracy.dart';
 import '../utils/format.dart';
 import '../widgets/common.dart';
 import '../widgets/route_timeline.dart';
+import '../widgets/trip_actions.dart';
 import '../widgets/trip_map.dart';
 
 /// Trip screen: Live (full map + next stop + HOLD TO END) · Stops (timeline) · More (status).
@@ -188,6 +189,19 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
               _MapButton(icon: Icons.my_location_rounded, tooltip: 'Centre on bus', onTap: () => _mapKey.currentState?.recenter()),
               const SizedBox(height: 10),
               _MapButton(icon: Icons.route_rounded, tooltip: 'Show whole route', onTap: () => _mapKey.currentState?.showWholeRoute()),
+            ]),
+          ),
+          // SOS + message students: left column under the banner (the right side holds the map buttons,
+          // and stacking four there would run into the timer chip on short phones).
+          Positioned(
+            left: 12,
+            top: top + 96,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              // Opens a sheet; sending needs a press-and-hold there, so a stray tap does nothing.
+              SosButton(busId: trip.busId),
+              const SizedBox(height: 12),
+              // Traffic / breakdown / running late -> push to the students on this bus.
+              _MapButton(icon: Icons.campaign_rounded, tooltip: 'Message students (delay)', onTap: () => showDelaySheet(context)),
             ]),
           ),
           // Speed (turns red above the admin's speed limit)

@@ -83,6 +83,7 @@ async function studentHome(req, res) {
       stopId: student.assigned_stop_id, stopName: student.assigned_stop_name,
       notificationsEnabled: student.notifications_enabled,
       alertMinutes: student.alert_minutes ?? 10,
+      alarmStyle: student.alarm_style !== false,
     },
     bus,
     route,

@@ -10,6 +10,7 @@ import '../providers/session_provider.dart';
 import '../providers/trip_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/trip_actions.dart';
 import 'start_trip_screen.dart';
 import 'tabs/profile_tab.dart';
 import 'tabs/route_tab.dart';
@@ -208,6 +209,9 @@ class _HomeTabState extends State<_HomeTab> with WidgetsBindingObserver {
           const SizedBox(width: 10),
           const Text('BUSMATE', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2.2)),
           const Spacer(),
+          // Emergencies outside a trip too (tap opens a sheet; sending needs a hold).
+          SosButton(size: 44, busId: bus?.id),
+          const SizedBox(width: 4),
           const ThemeToggleButton(),
           IconButton(tooltip: 'Log out', icon: const Icon(Icons.logout_rounded), onPressed: () => confirmLogout(context)),
         ]),
