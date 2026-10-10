@@ -16,6 +16,11 @@ const login = z.object({
   identifier: text(200),
   password: z.string().min(1).max(128),
 });
+const forgotPassword = z.object({ identifier: text(200) });
+const changePassword = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: password,
+});
 const register = z.object({
   name: text(),
   email,
@@ -121,7 +126,10 @@ const location = z.object({
 
 // ---------- Me / settings ----------
 const fcmToken = z.object({ token: z.string().min(10).max(4096) });
-const notificationPrefs = z.object({ enabled: z.boolean() });
+const notificationPrefs = z.object({
+  enabled: z.boolean().optional(),
+  alertMinutes: z.coerce.number().int().min(1).max(60).optional(), // alert this many minutes before my stop
+}).refine((v) => v.enabled !== undefined || v.alertMinutes !== undefined, { message: 'Nothing to update' });
 const chooseStop = z.object({ stopId: id });
 const chooseBus = z.object({ busId: id });
 
@@ -129,7 +137,7 @@ const trackQuery = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).opti
 
 module.exports = {
   trackQuery,
-  idParam, login, register,
+  idParam, login, forgotPassword, changePassword, register,
   busCreate, busUpdate,
   routeCreate, routeUpdate, stopCreate, stopUpdate, stopReorder, stopsQuery,
   driverCreate, driverUpdate, studentCreate, studentUpdate, studentsQuery,

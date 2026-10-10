@@ -48,7 +48,7 @@ export async function api<T = unknown>(path: string, options: { method?: Method;
   } catch (err) {
     const aborted = err instanceof DOMException && err.name === "AbortError";
     throw new ApiError(0, aborted ? "TIMEOUT" : "NETWORK", aborted
-      ? "The server took too long to respond. Please try again."
+      ? "The server is taking long to answer (it may be starting up). Wait a few seconds and try again."
       : "Cannot reach the BusMate server. Check that the backend is running and NEXT_PUBLIC_API_URL is correct.");
   } finally {
     clearTimeout(timer);

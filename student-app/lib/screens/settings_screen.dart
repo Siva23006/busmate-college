@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import '../utils/format.dart';
 import '../widgets/app_bar.dart';
+import '../widgets/password_dialogs.dart';
 import '../widgets/common.dart';
 import 'main_shell.dart';
 import 'select_bus_screen.dart';
@@ -159,6 +160,45 @@ class SettingsScreen extends StatelessWidget {
                   }
                 },
               ),
+              if (p.notificationsEnabled) ...[
+                divider(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Row(children: [
+                      IconTile(icon: Icons.alarm_rounded, color: BrandColors.amber),
+                      SizedBox(width: 14),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Alert before my stop', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          SizedBox(height: 2),
+                          Text('Phone rings when the bus is this close', style: TextStyle(fontSize: 12.5)),
+                        ]),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      for (final m in const [5, 10, 15, 20])
+                        ChoiceChip(
+                          label: Text('$m min'),
+                          selected: p.alertMinutes == m,
+                          selectedColor: BrandColors.amber,
+                          labelStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: p.alertMinutes == m ? BrandColors.ink : null,
+                          ),
+                          onSelected: (_) async {
+                            try {
+                              await p.setAlertMinutes(m);
+                            } on ApiException catch (e) {
+                              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                            }
+                          },
+                        ),
+                    ]),
+                  ]),
+                ),
+              ],
             ]),
           ),
         ),
@@ -185,8 +225,23 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
+        const SectionLabel('Security'),
         FadeSlideIn(
           index: 4,
+          child: BmCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              leading: const IconTile(icon: Icons.password_rounded, color: BrandColors.indigo),
+              title: const Text('Change password'),
+              subtitle: const Text('Forgot it? Log out and tap "Forgot password?"'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => showChangePasswordDialog(context, context.read<SessionProvider>().api),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        FadeSlideIn(
+          index: 5,
           child: OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               foregroundColor: BrandColors.red,

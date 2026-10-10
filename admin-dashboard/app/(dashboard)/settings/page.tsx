@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { API_URL, GOOGLE_MAPS_API_KEY } from "@/lib/config";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ChangePasswordForm } from "@/components/PasswordForms";
 import { Badge, Button, Card, Credit, PageHeader } from "@/components/ui";
 
 export default function SettingsPage() {
@@ -31,7 +32,12 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between"><span className="text-muted">Theme</span><ThemeToggle /></div>
           <Button variant="danger" onClick={logout}>Logout</Button>
         </Card>
-        <Card delay={2} className="p-5 text-[13px] lg:col-span-2">
+        <Card delay={2} className="space-y-3 p-5 text-[13px]">
+          <h3 className="text-[15px] font-semibold">Change password</h3>
+          <p className="text-muted">Forgot it? Log out and use "Forgot password?" on the sign-in page.</p>
+          <ChangePasswordForm />
+        </Card>
+        <Card delay={3} className="p-5 text-[13px]">
           <h3 className="mb-2 text-[15px] font-semibold">About</h3>
           <p className="text-muted">BusMate is a college transportation technology prototype. Arrival times are estimates, not guarantees. Data labeled DEMO / SIMULATION is never mixed with real tracking.</p>
           <Credit className="text-subtle mt-3" />

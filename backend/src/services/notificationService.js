@@ -1,26 +1,16 @@
 // Stores notifications, pushes them over Socket.IO, and sends FCM pushes when configured.
-const fs = require('fs');
 const db = require('../config/db');
-const env = require('../config/env');
+const firebase = require('./firebase');
 const realtime = require('./realtime');
 
 let messaging = null; // firebase-admin messaging, if configured
+const ARRIVAL_TYPES = new Set(['APPROACHING', 'NEAR_1KM', 'REACHED_STOP']);
 
 function initFirebase() {
-  if (!env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-    console.log('[fcm] FIREBASE_SERVICE_ACCOUNT_PATH not set: push notifications disabled (in-app still work).');
-    return;
-  }
-  try {
-    // Optional dependency: installed with `npm install firebase-admin`.
-    // eslint-disable-next-line global-require
-    const admin = require('firebase-admin');
-    const credentials = JSON.parse(fs.readFileSync(env.FIREBASE_SERVICE_ACCOUNT_PATH, 'utf8'));
-    admin.initializeApp({ credential: admin.credential.cert(credentials) });
+  const admin = firebase.init();
+  if (admin) {
     messaging = admin.messaging();
     console.log('[fcm] Firebase Cloud Messaging enabled.');
-  } catch (err) {
-    console.warn('[fcm] Could not start Firebase, push disabled:', err.message);
   }
 }
 
@@ -31,7 +21,17 @@ async function sendPush(tokens, title, message, data) {
       tokens,
       notification: { title, body: message },
       data: Object.fromEntries(Object.entries(data || {}).map(([k, v]) => [k, String(v)])),
-      android: { priority: 'high', notification: { channelId: 'busmate_alerts' } },
+      // "Bus is near / at your stop" uses the loud arrival channel; other alerts the normal one.
+      // Both channels are created by the student app (MainActivity.kt).
+      android: {
+        priority: 'high',
+        ttl: 30 * 60 * 1000, // a stale "bus is coming" alert is useless after 30 min
+        notification: {
+          channelId: ARRIVAL_TYPES.has(data && data.type) ? 'busmate_arrival' : 'busmate_alerts',
+          sound: 'default',
+          defaultVibrateTimings: true,
+        },
+      },
     });
     // Remove tokens Firebase says are dead so we stop sending to them.
     const dead = [];

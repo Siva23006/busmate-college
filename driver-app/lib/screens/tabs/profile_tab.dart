@@ -6,6 +6,7 @@ import '../../providers/session_provider.dart';
 import '../../providers/trip_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/password_dialogs.dart';
 
 /// Asks before logging out.
 Future<void> confirmLogout(BuildContext context) async {
@@ -110,9 +111,25 @@ class ProfileTab extends StatelessWidget {
           Card(child: ThemeSwitchTile()),
         ]),
       ),
-      const SizedBox(height: 22),
+      const SizedBox(height: 18),
       FadeSlideIn(
         delay: FadeSlideIn.stagger(3),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const SectionLabel('Security'),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.password_rounded),
+              title: const Text('Change password'),
+              subtitle: const Text('Forgot it? Log out and tap "Forgot password?"'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => showChangePasswordDialog(context, context.read<SessionProvider>().api),
+            ),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 22),
+      FadeSlideIn(
+        delay: FadeSlideIn.stagger(4),
         child: OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             foregroundColor: BrandColors.red,

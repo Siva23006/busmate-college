@@ -109,7 +109,7 @@ export default function StudentsPage() {
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Full name"><Input value={form.name} onChange={set("name")} /></Field>
           <Field label="Student ID" hint="Used to log in"><Input value={form.student_id} onChange={set("student_id")} /></Field>
-          <Field label="Email (optional)"><Input type="email" value={form.email} onChange={set("email")} /></Field>
+          <Field label="Email" hint="Needed for &quot;Forgot password&quot; reset emails"><Input type="email" value={form.email} onChange={set("email")} /></Field>
           <Field label="Phone"><Input value={form.phone} onChange={set("phone")} /></Field>
           <Field label="Department"><Input value={form.department} onChange={set("department")} /></Field>
           <Field label="Year"><Select value={form.year} onChange={set("year")}><option value="">-</option>{[1, 2, 3, 4, 5].map((y) => <option key={y}>{y}</option>)}</Select></Field>

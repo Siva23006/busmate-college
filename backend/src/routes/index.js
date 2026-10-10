@@ -28,6 +28,10 @@ router.get('/health', h(async (_req, res) => {
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false,
   message: { error: { code: 'TOO_MANY_ATTEMPTS', message: 'Too many login attempts. Try again in 15 minutes.' } } });
 router.post('/auth/login', loginLimiter, validate({ body: v.login }), h(auth.login));
+const resetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false,
+  message: { error: { code: 'TOO_MANY_ATTEMPTS', message: 'Too many reset requests. Try again in 15 minutes.' } } });
+router.post('/auth/forgot-password', resetLimiter, validate({ body: v.forgotPassword }), h(auth.forgotPassword));
+router.put('/me/password', requireAuth, loginLimiter, validate({ body: v.changePassword }), h(auth.changePassword));
 router.post('/auth/register', requireAuth, ADMIN, validate({ body: v.register }), h(auth.register));
 router.get('/auth/me', requireAuth, h(auth.me));
 router.put('/me/fcm-token', requireAuth, validate({ body: v.fcmToken }), h(auth.setFcmToken));

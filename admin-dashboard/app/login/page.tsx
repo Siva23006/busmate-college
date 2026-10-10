@@ -5,6 +5,7 @@ import { BellRing, Clock3, Lock, Mail, Navigation, ShieldCheck } from "lucide-re
 import { useAuth } from "@/components/AuthProvider";
 import { Brand } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ForgotPasswordModal } from "@/components/PasswordForms";
 import { Button, Credit, ErrorBox, Field, Input, stagger } from "@/components/ui";
 import { errorMessage } from "@/lib/api";
 
@@ -24,6 +25,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   useEffect(() => { if (ready && user) router.replace("/"); }, [ready, user, router]);
 
@@ -122,11 +124,13 @@ export default function LoginPage() {
                 </div>
               </Field>
               <Button type="submit" loading={busy} className="h-10 w-full">Sign in</Button>
+              <button type="button" onClick={() => setForgotOpen(true)} className="block w-full text-center text-[13px] font-semibold text-primary-text hover:underline">Forgot password?</button>
               <p className="text-muted text-center text-xs">Only college administrators can sign in here. Drivers and students use the BusMate mobile apps.</p>
             </div>
           </form>
         </div>
         <Credit className="text-subtle text-center lg:hidden" />
+        {forgotOpen && <ForgotPasswordModal open onClose={() => setForgotOpen(false)} initialId={identifier} />}
       </div>
     </div>
   );

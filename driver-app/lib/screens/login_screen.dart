@@ -5,6 +5,7 @@ import '../core/api_client.dart';
 import '../providers/session_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/password_dialogs.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -108,6 +109,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: _busy
                                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5))
                                     : const Text('LOG IN'),
+                              ),
+                              const SizedBox(height: 6),
+                              TextButton(
+                                onPressed: () => showForgotPasswordDialog(context, context.read<SessionProvider>().api, initialId: _id.text.trim()),
+                                child: const Text('Forgot password?'),
                               ),
                             ]),
                           ),

@@ -1,5 +1,6 @@
 // CRUD for buses, routes, stops, drivers and students (admin; some reads open to all roles).
 const bcrypt = require('bcryptjs');
+const fbAuth = require('../services/firebaseAuthService');
 const db = require('../config/db');
 const AppError = require('../utils/AppError');
 const busModel = require('../models/busModel');
@@ -150,7 +151,9 @@ const drivers = {
       await assignDriverBus(client, driverId, data.bus_id);
       return driverId;
     });
-    res.status(201).json({ driver: await driverModel.findById(id) });
+    const created = await driverModel.findById(id);
+    await fbAuth.syncAfterAdminSave(created.user_id, data.password);
+    res.status(201).json({ driver: created });
   },
   async update(req, res) {
     const driver = await driverModel.findById(idOf(req));
@@ -164,6 +167,7 @@ const drivers = {
       await driverModel.update(driver.id, data, client);
       await assignDriverBus(client, driver.id, data.bus_id);
     });
+    await fbAuth.syncAfterAdminSave(driver.user_id, data.password);
     res.json({ driver: await driverModel.findById(driver.id) });
   },
 };
@@ -191,7 +195,9 @@ const students = {
       const user = await userModel.create({ ...data, role: 'STUDENT', password_hash }, client);
       return studentModel.create(user.id, data, client);
     });
-    res.status(201).json({ student: await studentModel.findById(id) });
+    const created = await studentModel.findById(id);
+    await fbAuth.syncAfterAdminSave(created.user_id, data.password);
+    res.status(201).json({ student: created });
   },
   async update(req, res) {
     const student = await studentModel.findById(idOf(req));
@@ -204,12 +210,14 @@ const students = {
       await userModel.update(student.user_id, userData, client);
       await studentModel.update(student.id, data, client);
     });
+    await fbAuth.syncAfterAdminSave(student.user_id, data.password);
     res.json({ student: await studentModel.findById(student.id) });
   },
   async remove(req, res) {
     const student = await studentModel.findById(idOf(req));
     if (!student) throw AppError.notFound('Student');
-    await db.query('DELETE FROM users WHERE id = $1', [student.user_id]);
+    const { rows } = await db.query('DELETE FROM users WHERE id = $1 RETURNING firebase_uid', [student.user_id]);
+    await fbAuth.removeAccount(rows[0] && rows[0].firebase_uid);
     res.status(204).end();
   },
 };

@@ -113,7 +113,7 @@ export default function DriversPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Full name"><Input value={form.name} onChange={set("name")} /></Field>
           <Field label="Employee ID" hint="Used to log in"><Input value={form.employee_id} onChange={set("employee_id")} placeholder="DRV-001" /></Field>
-          <Field label="Email (optional)"><Input type="email" value={form.email} onChange={set("email")} /></Field>
+          <Field label="Email" hint="Needed for &quot;Forgot password&quot; reset emails"><Input type="email" value={form.email} onChange={set("email")} /></Field>
           <Field label="Phone"><Input value={form.phone} onChange={set("phone")} /></Field>
           <Field label="License number"><Input value={form.license_number} onChange={set("license_number")} /></Field>
           <Field label="Assigned bus">

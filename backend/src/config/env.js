@@ -24,6 +24,10 @@ const schema = z.object({
 
   // Firebase Cloud Messaging (Phase 13). Optional: path to service-account JSON.
   FIREBASE_SERVICE_ACCOUNT_PATH: z.string().optional(),
+  // Same key as one line of JSON (for Render, where you can't upload a file).
+  FIREBASE_SERVICE_ACCOUNT: z.string().optional(),
+  // Firebase project's Web API key (Project settings > General). Turns on Firebase login + forgot password.
+  FIREBASE_WEB_API_KEY: z.string().optional(),
 
   // Allows the simulator to create DEMO / SIMULATION trips. Keep false in production.
   ALLOW_SIMULATION: z.enum(['true', 'false']).default('false'),
